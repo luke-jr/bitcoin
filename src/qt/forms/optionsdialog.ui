@@ -344,6 +344,13 @@
         </widget>
        </item>
        <item>
+        <widget class="QCheckBox" name="coinControlFeatures">
+         <property name="text">
+          <string>Display coin &amp;control features</string>
+         </property>
+        </widget>
+       </item>
+       <item>
         <spacer name="verticalSpacer_Display">
          <property name="orientation">
           <enum>Qt::Vertical</enum>
