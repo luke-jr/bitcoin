@@ -25,7 +25,7 @@
         <x>0</x>
         <y>0</y>
         <width>666</width>
-        <height>122</height>
+        <height>137</height>
        </rect>
       </property>
       <layout class="QVBoxLayout" name="verticalLayout_2">
@@ -66,17 +66,13 @@
        <property name="text">
         <string>Send From:</string>
        </property>
+       <property name="textFormat">
+        <enum>Qt::PlainText</enum>
+       </property>
       </widget>
      </item>
      <item>
-      <widget class="QLineEdit" name="sendFrom">
-       <property name="inputMask">
-        <string/>
-       </property>
-       <property name="text">
-        <string/>
-       </property>
-      </widget>
+      <widget class="QLineEdit" name="sendFrom"/>
      </item>
     </layout>
    </item>

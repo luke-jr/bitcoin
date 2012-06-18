@@ -111,7 +111,7 @@ private:
     void createTrayIcon();
 
 public slots:
-    /** Switch to send coins page */
+    /** Switch to send coins page (public, because it get's called from coincontrolpage.cpp) */
     void gotoSendCoinsPage();
 
     /** Set number of connections shown in the UI */

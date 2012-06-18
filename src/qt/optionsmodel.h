@@ -50,13 +50,15 @@ public:
     bool getDisplayAddresses();
     QString getLanguage() { return language; }
     bool getCoinControlFeatures();
+
 private:
     int nDisplayUnit;
     bool bDisplayAddresses;
     bool fMinimizeToTray;
     bool fMinimizeOnClose;
     QString language;
-    bool bCoinControlFeatures;
+    bool fCoinControlFeatures;
+
 signals:
     void displayUnitChanged(int unit);
     void coinControlFeaturesChanged(bool);

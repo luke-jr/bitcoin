@@ -12,6 +12,7 @@
 #include <QLocale>
 #include <QTextDocument>
 #include <QScrollBar>
+#include <QLineEdit>
 
 SendCoinsDialog::SendCoinsDialog(QWidget *parent) :
     QDialog(parent),
@@ -26,6 +27,11 @@ SendCoinsDialog::SendCoinsDialog(QWidget *parent) :
     ui->sendButton->setIcon(QIcon());
 #endif
 
+#if QT_VERSION >= 0x040700
+    /* Do not move this to the XML file, Qt before 4.7 will choke on it */
+    ui->sendFrom->setPlaceholderText(tr("Restrict the client to only send from these Bitcoin addresses"));
+#endif
+
     addEntry();
 
     connect(ui->addButton, SIGNAL(clicked()), this, SLOT(addEntry()));
@@ -34,10 +40,6 @@ SendCoinsDialog::SendCoinsDialog(QWidget *parent) :
     fNewRecipientAllowed = true;
 
     ui->sendFrom->setFont(GUIUtil::bitcoinAddressFont());
-#if QT_VERSION >= 0x040700
-    /* Do not move this to the XML file, Qt before 4.7 will choke on it */
-    ui->sendFrom->setPlaceholderText(tr("Restrict the client to only send from these Bitcoin addresses."));
-#endif
 }
 
 void SendCoinsDialog::setSendFromAddress(std::string address)
@@ -295,7 +297,7 @@ bool SendCoinsDialog::handleURI(const QString &uri)
 {
     SendCoinsRecipient rv;
     // URI has to be valid
-    if (GUIUtil::parseBitcoinURI(uri, &rv))
+    if(GUIUtil::parseBitcoinURI(uri, &rv))
     {
         pasteEntry(rv);
         return true;

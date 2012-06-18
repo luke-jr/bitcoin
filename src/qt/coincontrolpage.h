@@ -1,27 +1,40 @@
 #ifndef COINCONTROLPAGE_H
 #define COINCONTROLPAGE_H
 
+#include <QDialog>
+#include <QTableWidgetItem>
+
+namespace Ui {
+    class CoinControlPage;
+}
 class BitcoinGUI;
+class OptionsModel;
 
-#include <QWidget>
-#include <QTableWidget>
+QT_BEGIN_NAMESPACE
+QT_END_NAMESPACE
 
-class CoinControlPage : public QWidget
+class CoinControlPage : public QDialog
 {
     Q_OBJECT
 
 public:
-    CoinControlPage(QWidget *parent);
+    explicit CoinControlPage(QWidget *parent = 0);
+    ~CoinControlPage();
+
+    void setModel(OptionsModel *model);
+
     void UpdateTable();
     std::string selectedAddresses();
     void clearSelection();
 
 private:
-    QTableWidget *table;
+    Ui::CoinControlPage *ui;
     BitcoinGUI *gui;
+    OptionsModel *model;
 
 private slots:
     void sendFromSelectedAddress(QTableWidgetItem *item);
+    void updateDisplayUnit();
 };
 
-#endif
+#endif // COINCONTROLPAGE_H

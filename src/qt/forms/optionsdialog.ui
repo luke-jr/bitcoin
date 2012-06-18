@@ -345,6 +345,9 @@
        </item>
        <item>
         <widget class="QCheckBox" name="coinControlFeatures">
+         <property name="toolTip">
+          <string>TODO</string>
+         </property>	
          <property name="text">
           <string>Display coin &amp;control features</string>
          </property>

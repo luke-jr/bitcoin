@@ -2,7 +2,6 @@
 #define SENDCOINSDIALOG_H
 
 #include <QDialog>
-#include <QLineEdit>
 
 namespace Ui {
     class SendCoinsDialog;
