@@ -1873,6 +1873,7 @@ static struct BlacklistEntry BlacklistedPrefixes[] = {
     {0xc4c5d791, 0xc4c5d791, "CHBS"},  // 1JwSSubhmg6iPtRjtyqhUYYH7bZg3Lfy1T
     {0x434e5452, 0x434e5452, "Counterparty"},
     {0x069532d8, 0x069532da, "SatoshiBones"},
+    {0x06c06f6d, 0x06c06f6d, "SatoshiBones"}, // Hot Wallets
     {0xda5dde84, 0xda5dde94, "Lucky Bit"},
 };
 
