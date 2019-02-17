@@ -173,6 +173,15 @@ public:
     }
     void mapPort(bool use_upnp, bool use_natpmp) override { StartMapPort(use_upnp, use_natpmp); }
     bool getProxy(Network net, Proxy& proxy_info) override { return GetProxy(net, proxy_info); }
+    std::vector<CNetAddr> getNetLocalAddresses() override
+    {
+        std::vector<CNetAddr> ret;
+        LOCK(g_maplocalhost_mutex);
+        for (const std::pair<const CNetAddr, LocalServiceInfo> &item : mapLocalHost) {
+            ret.emplace_back(item.first);
+        }
+        return ret;
+    }
     size_t getNodeCount(ConnectionDirection flags) override
     {
         return m_context->connman ? m_context->connman->GetNodeCount(flags) : 0;
