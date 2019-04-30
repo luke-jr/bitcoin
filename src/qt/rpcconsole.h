@@ -21,6 +21,7 @@
 #include <QWidget>
 
 class GuiNetWatch;
+class PairingPage;
 class PlatformStyle;
 class RPCExecutor;
 class RPCTimerInterface;
@@ -55,6 +56,7 @@ public:
     }
 
     void setClientModel(ClientModel *model = nullptr, int bestblock_height = 0, int64_t bestblock_date = 0, double verification_progress = 0.0);
+    void addPairingTab();
 
 #ifdef ENABLE_WALLET
     void addWallet(WalletModel* const walletModel);
@@ -73,7 +75,8 @@ public:
         INFO,
         CONSOLE,
         GRAPH,
-        PEERS
+        PEERS,
+        PAIRING,
     };
 
     std::vector<TabTypes> tabs() const;
@@ -165,6 +168,7 @@ private:
     Ui::RPCConsole* const ui;
     ClientModel *clientModel = nullptr;
     std::map<TabTypes, QWidget*> m_tabs;
+    PairingPage *m_tab_pairing{nullptr};
     GuiNetWatch *netwatch = nullptr;
     QStringList history;
     int historyPtr = 0;
