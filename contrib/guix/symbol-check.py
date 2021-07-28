@@ -151,7 +151,7 @@ MACHO_ALLOWED_LIBRARIES = {
 'UniformTypeIdentifiers', # collection of types that map to MIME and file types
 }
 
-PE_ALLOWED_LIBRARIES = {
+PE_ALLOWED_LIBRARIES = {libname.lower() for libname in (
 'ADVAPI32.dll', # legacy security & registry
 'bcrypt.dll', # newer security and identity API
 'IPHLPAPI.DLL', # IP helper API
@@ -185,7 +185,7 @@ PE_ALLOWED_LIBRARIES = {
 'WTSAPI32.dll', # Remote Desktop
 'SETUPAPI.dll', # Windows Setup API
 'SHCORE.dll', # Stream Handler Core
-}
+)}
 
 def check_version(max_versions, version, arch) -> bool:
     (lib, _, ver) = version.rpartition('_')
@@ -266,7 +266,7 @@ def check_MACHO_lld(binary) -> bool:
 def check_PE_libraries(binary) -> bool:
     ok: bool = True
     for dylib in binary.libraries:
-        if dylib not in PE_ALLOWED_LIBRARIES:
+        if dylib.lower() not in PE_ALLOWED_LIBRARIES:
             print(f'{dylib} is not in ALLOWED_LIBRARIES!')
             ok = False
     return ok
