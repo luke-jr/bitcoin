@@ -294,7 +294,7 @@ CAmount CWallet::GetLegacyBalance(int minDepth) const
             if (!(txin.nSequence == CTxIn::SEQUENCE_FINAL)) {
                 if (tx.nLockTime >= LOCKTIME_THRESHOLD) {
                     if (tip_mtp == -1) {
-                        Assume(this->chain().findBlock(tip_blockhash, interfaces::FoundBlock().mtpTime(tip_mtp)));
+                        CHECK_NONFATAL(this->chain().findBlock(tip_blockhash, interfaces::FoundBlock().mtpTime(tip_mtp)));
                     }
                     if (tx.nLockTime < tip_mtp) {
                         return true;
