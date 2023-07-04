@@ -43,6 +43,7 @@ private:
 
     void* pcontext{nullptr};
     std::list<std::unique_ptr<CZMQAbstractNotifier>> notifiers;
+    std::function<bool(CBlock&, const CBlockIndex&)> m_get_block_by_index;
 };
 
 extern std::unique_ptr<CZMQNotificationInterface> g_zmq_notification_interface;

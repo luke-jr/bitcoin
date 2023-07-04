@@ -4,6 +4,7 @@
 
 #include <zmq/zmqnotificationinterface.h>
 
+#include <chain.h>
 #include <common/args.h>
 #include <kernel/chain.h>
 #include <kernel/mempool_entry.h>
@@ -70,6 +71,7 @@ std::unique_ptr<CZMQNotificationInterface> CZMQNotificationInterface::Create(std
     {
         std::unique_ptr<CZMQNotificationInterface> notificationInterface(new CZMQNotificationInterface());
         notificationInterface->notifiers = std::move(notifiers);
+        notificationInterface->m_get_block_by_index = get_block_by_index;
 
         if (notificationInterface->Initialize()) {
             return notificationInterface;
@@ -138,10 +140,23 @@ void TryForEachAndRemoveFailed(std::list<std::unique_ptr<CZMQAbstractNotifier>>&
 
 } // anonymous namespace
 
-void CZMQNotificationInterface::UpdatedBlockTip(const CBlockIndex *pindexNew, const CBlockIndex *pindexFork, bool fInitialDownload, const std::shared_ptr<const CBlock>& block)
+void CZMQNotificationInterface::UpdatedBlockTip(const CBlockIndex *pindexNew, const CBlockIndex *pindexFork, bool fInitialDownload, const std::shared_ptr<const CBlock>& block_cached)
 {
-    if (fInitialDownload || !block || pindexNew == pindexFork) // In IBD or blocks were disconnected without any new ones
+    if (fInitialDownload || pindexNew == pindexFork) // In IBD or blocks were disconnected without any new ones
         return;
+
+    std::shared_ptr<const CBlock> block = block_cached;
+    if (!block) {
+        // This shouldn't happen, but just in case
+        LogPrintf("BUG! PLEASE REPORT THIS! Cached CBlock unexpectedly missing in %s\n", __func__);
+
+        std::shared_ptr<CBlock> pblock = std::make_shared<CBlock>();
+        if (!m_get_block_by_index(*pblock, *pindexNew)) {
+            LogPrint(BCLog::ZMQ, "Error: Can't read block %s from disk\n", pindexNew->GetBlockHash().ToString());
+            return;
+        }
+        block = pblock;
+    }
 
     TryForEachAndRemoveFailed(notifiers, [block](CZMQAbstractNotifier* notifier) {
         return notifier->NotifyBlock(block);
