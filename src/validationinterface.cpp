@@ -21,6 +21,8 @@
 
 std::string RemovalReasonToString(const MemPoolRemovalReason& r) noexcept;
 
+bool CValidationInterface::any_use_tip_block_cache{false};
+
 /**
  * MainSignalsImpl manages a list of shared_ptr<CValidationInterface> callbacks.
  *

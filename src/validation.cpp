@@ -3293,7 +3293,8 @@ bool Chainstate::ActivateBestChain(BlockValidationState& state, std::shared_ptr<
                 for (const PerBlockConnectTrace& trace : connectTrace.GetBlocksConnected()) {
                     assert(trace.pblock && trace.pindex);
                     GetMainSignals().BlockConnected(this->GetRole(), trace.pblock, trace.pindex);
-                    if (trace.pindex == pindexNewTip) {
+                    // Avoid keeping the CBlock around longer than we have to
+                    if (trace.pindex == pindexNewTip && CValidationInterface::any_use_tip_block_cache) {
                         new_tip_block = trace.pblock;
                     }
                 }

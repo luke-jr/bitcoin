@@ -77,6 +77,9 @@ void SyncWithValidationInterfaceQueue() LOCKS_EXCLUDED(cs_main);
  * ValidationInterface() subscribers.
  */
 class CValidationInterface {
+public:
+    static bool any_use_tip_block_cache;
+
 protected:
     /**
      * Protected destructor so that instances can only be deleted by derived classes.
