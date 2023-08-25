@@ -107,7 +107,7 @@ static void ComplexMemPool(benchmark::Bench& bench)
             AddTx(tx, pool);
         }
         pool.TrimToSize(pool.DynamicMemoryUsage() * 3 / 4);
-        pool.TrimToSize(GetVirtualTransactionSize(*ordered_coins.front()));
+        pool.TrimToSize(GetVirtualTransactionSize(*ordered_coins.front(), 0, 0));
     });
 }
 

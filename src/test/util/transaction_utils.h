@@ -5,6 +5,7 @@
 #ifndef BITCOIN_TEST_UTIL_TRANSACTION_UTILS_H
 #define BITCOIN_TEST_UTIL_TRANSACTION_UTILS_H
 
+#include <policy/policy.h>
 #include <primitives/transaction.h>
 #include <script/sign.h>
 
@@ -49,5 +50,11 @@ bool SignSignature(const SigningProvider &provider, const CScript& fromPubKey, C
                    unsigned int nIn, const CAmount& amount, int nHashType, SignatureData& sig_data);
 bool SignSignature(const SigningProvider &provider, const CTransaction& txFrom, CMutableTransaction& txTo,
                    unsigned int nIn, int nHashType, SignatureData& sig_data);
+
+// Calculates the BIP 141 virtual size, without consideration for other vsize factors.
+static inline int64_t GetVirtualTransactionSize(const CTransaction& tx)
+{
+    return GetVirtualTransactionSize(tx, 0, 0);
+}
 
 #endif // BITCOIN_TEST_UTIL_TRANSACTION_UTILS_H

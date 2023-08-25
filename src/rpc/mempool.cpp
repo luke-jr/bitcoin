@@ -91,7 +91,8 @@ static RPCHelpMan sendrawtransaction()
 
             const CFeeRate max_raw_tx_fee_rate{ParseFeeRate(self.Arg<UniValue>("maxfeerate"))};
 
-            int64_t virtual_size = GetVirtualTransactionSize(*tx);
+            // BUG: The virtual size here currently fails to consider sigops, which could potentially result in an incorrectly-low max_raw_tx_fee
+            int64_t virtual_size = GetVirtualTransactionSize(*tx, 0, 0 /* BUG */);
             CAmount max_raw_tx_fee = max_raw_tx_fee_rate.GetFee(virtual_size);
 
             std::string err_string;
@@ -847,7 +848,8 @@ static UniValue OrphanToJSON(const node::TxOrphanage::OrphanInfo& orphan)
     o.pushKV("txid", orphan.tx->GetHash().ToString());
     o.pushKV("wtxid", orphan.tx->GetWitnessHash().ToString());
     o.pushKV("bytes", orphan.tx->GetTotalSize());
-    o.pushKV("vsize", GetVirtualTransactionSize(*orphan.tx));
+    // BUG: The virtual size here currently fails to consider sigops/etc
+    o.pushKV("vsize", GetVirtualTransactionSize(*orphan.tx, 0, 0));
     o.pushKV("weight", GetTransactionWeight(*orphan.tx));
     UniValue from(UniValue::VARR);
     for (const auto fromPeer: orphan.announcers) {
