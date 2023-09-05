@@ -449,6 +449,7 @@ public:
     const bool m_permit_bare_pubkey;
     const bool m_permit_bare_multisig;
     const std::optional<unsigned> m_max_datacarrier_bytes;
+    bool m_datacarrier_fullcount;
     const bool m_require_standard;
     const RBFPolicy m_rbf_policy;
 

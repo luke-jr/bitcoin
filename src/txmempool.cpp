@@ -411,6 +411,7 @@ CTxMemPool::CTxMemPool(const Options& opts)
       m_permit_bare_pubkey{opts.permit_bare_pubkey},
       m_permit_bare_multisig{opts.permit_bare_multisig},
       m_max_datacarrier_bytes{opts.max_datacarrier_bytes},
+      m_datacarrier_fullcount{opts.datacarrier_fullcount},
       m_require_standard{opts.require_standard},
       m_rbf_policy{opts.rbf_policy},
       m_limits{opts.limits}
