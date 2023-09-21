@@ -168,6 +168,6 @@ static inline int64_t GetVirtualTransactionInputSize(const CTxIn& tx)
     return GetVirtualTransactionInputSize(tx, 0, 0);
 }
 
-int32_t DatacarrierBytes(const CTransaction& tx, const CCoinsViewCache& view);
+uint32_t DatacarrierBytes(const CTransaction& tx, const CCoinsViewCache& view);
 
 #endif // BITCOIN_POLICY_POLICY_H
