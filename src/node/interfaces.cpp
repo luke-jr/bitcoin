@@ -177,6 +177,7 @@ public:
     {
         std::vector<CNetAddr> ret;
         LOCK(g_maplocalhost_mutex);
+        ret.reserve(mapLocalHost.size());
         for (const std::pair<const CNetAddr, LocalServiceInfo> &item : mapLocalHost) {
             ret.emplace_back(item.first);
         }
