@@ -844,8 +844,7 @@ static UniValue OrphanToJSON(const node::TxOrphanage::OrphanInfo& orphan)
     o.pushKV("txid", orphan.tx->GetHash().ToString());
     o.pushKV("wtxid", orphan.tx->GetWitnessHash().ToString());
     o.pushKV("bytes", orphan.tx->GetTotalSize());
-    // BUG: The virtual size here currently fails to consider sigops/etc
-    o.pushKV("vsize", GetVirtualTransactionSize(*orphan.tx, 0, 0));
+    o.pushKV("vsize", GetVirtualTransactionSize(*orphan.tx));
     o.pushKV("weight", GetTransactionWeight(*orphan.tx));
     UniValue from(UniValue::VARR);
     for (const auto fromPeer: orphan.announcers) {
