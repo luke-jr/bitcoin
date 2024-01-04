@@ -272,6 +272,30 @@ class WalletSendTest(BitcoinTestFramework):
         res = w2.walletprocesspsbt(res["psbt"])
         assert res["complete"]
 
+        # verify that fee estimation modes parse case insensitively
+        self.log.info("Testing case insensitive fee estimation mode parse")
+        for mode in ["ecoNOMICAL", "economical", "ECONOMICAL"]:
+            res = self.test_send(from_wallet=w0, to_wallet=w1, amount=1,
+                estimate_mode=mode, add_to_wallet=False
+            )
+            assert_equal(res["complete"], True)
+
+            res = self.test_send(from_wallet=w0, to_wallet=w1, amount=1,
+                arg_estimate_mode=mode, add_to_wallet=False
+            )
+            assert_equal(res["complete"], True)
+
+        # Verify that different variations of 'unset' still counts as
+        # not setting the estimation mode
+        for mode in ["unSET", "unset", "UNSET"]:
+            self.test_send(from_wallet=w0, to_wallet=w1, amount=1,
+                arg_estimate_mode=mode, arg_conf_target=1, add_to_wallet=False,  expect_error = (-8, 'Specify estimate_mode')
+            )
+
+            self.test_send(from_wallet=w0, to_wallet=w1, amount=1,
+                estimate_mode=mode, conf_target=1, add_to_wallet=False,  expect_error = (-8, 'Specify estimate_mode')
+            )
+
         self.log.info("Create OP_RETURN...")
         self.test_send(from_wallet=w0, to_wallet=w1, amount=1)
         self.test_send(from_wallet=w0, data="Hello World", expect_error=(-8, "Data must be hexadecimal string (not 'Hello World')"))
