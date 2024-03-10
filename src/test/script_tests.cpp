@@ -1552,8 +1552,8 @@ BOOST_AUTO_TEST_CASE(script_GetScriptForTransactionInput)
         prev_script = CScript() << OP_0 << zeros(20);
         // segwit: empty scriptsig
         tx_in.scriptSig = CScript();
-        tx_in.scriptWitness.stack.push_back(zeros(65)); // signature
-        tx_in.scriptWitness.stack.push_back(zeros(33)); // pubkey
+        tx_in.scriptWitness.stack.emplace_back(65); // signature
+        tx_in.scriptWitness.stack.emplace_back(33); // pubkey
         // this should return the redeem script
         auto [ret_script, scale] = GetScriptForTransactionInput(prev_script, tx_in);
         // should have no script at all since it's wrapped P2WPKH
@@ -1567,7 +1567,7 @@ BOOST_AUTO_TEST_CASE(script_GetScriptForTransactionInput)
         prev_script = CScript() << OP_0 << zeros(32);
         // segwit: empty scriptsig
         tx_in.scriptSig = CScript();
-        tx_in.scriptWitness.stack.push_back(zeros(65)); // arbitrary value to satisfy redeem script
+        tx_in.scriptWitness.stack.emplace_back(65); // arbitrary value to satisfy redeem script
         CScript redeem_script = CScript() << OP_0;
         auto redeem_vec{std::vector<unsigned char>(redeem_script.begin(), redeem_script.end())};
         tx_in.scriptWitness.stack.push_back(redeem_vec);
@@ -1583,7 +1583,7 @@ BOOST_AUTO_TEST_CASE(script_GetScriptForTransactionInput)
         prev_script = CScript() << OP_0 << zeros(32);
         // segwit: empty scriptsig
         tx_in.scriptSig = CScript();
-        tx_in.scriptWitness.stack.push_back(zeros(65)); // arbitrary value to satisfy redeem script
+        tx_in.scriptWitness.stack.emplace_back(65); // arbitrary value to satisfy redeem script
         CScript redeem_script = CScript() << OP_FALSE << OP_IF << zeros(10) << OP_ENDIF;
         auto redeem_vec{std::vector<unsigned char>(redeem_script.begin(), redeem_script.end())};
         tx_in.scriptWitness.stack.push_back(redeem_vec);
@@ -1620,7 +1620,7 @@ BOOST_AUTO_TEST_CASE(script_GetScriptForTransactionInput)
 
         // in real life, one or more values (to satisfy the redeem script) would be pushed to the stack
         CScript wit = CScript() << OP_7;
-        tx_in.scriptWitness.stack.push_back(std::vector<unsigned char>(wit.begin(), wit.end()));
+        tx_in.scriptWitness.stack.emplace_back(wit.begin(), wit.end());
         // and then finally the redeem script itself (as the last stack element)
         auto redeem_vec{std::vector<unsigned char>(witness_redeem_script.begin(), witness_redeem_script.end())};
         tx_in.scriptWitness.stack.push_back(redeem_vec);
@@ -1644,7 +1644,7 @@ BOOST_AUTO_TEST_CASE(script_GetScriptForTransactionInput)
 
         // in real life, one or more values (to satisfy the redeem script) would be pushed to the stack
         CScript wit = CScript() << OP_7;
-        tx_in.scriptWitness.stack.push_back(std::vector<unsigned char>(wit.begin(), wit.end()));
+        tx_in.scriptWitness.stack.emplace_back(wit.begin(), wit.end());
         // and then finally the redeem script itself (as the last stack element)
         auto redeem_vec{std::vector<unsigned char>(witness_redeem_script.begin(), witness_redeem_script.end())};
         tx_in.scriptWitness.stack.push_back(redeem_vec);
@@ -1664,7 +1664,7 @@ BOOST_AUTO_TEST_CASE(script_GetScriptForTransactionInput)
         prev_script = CScript() << OP_1 << zeros(32);
         // segwit: empty scriptsig
         tx_in.scriptSig = CScript();
-        tx_in.scriptWitness.stack.push_back(zeros(65)); // signature
+        tx_in.scriptWitness.stack.emplace_back(65); // signature
         auto [ret_script, scale] = GetScriptForTransactionInput(prev_script, tx_in);
         BOOST_CHECK(ret_script == CScript());
         BOOST_CHECK_EQUAL(scale, 0);
@@ -1676,7 +1676,7 @@ BOOST_AUTO_TEST_CASE(script_GetScriptForTransactionInput)
         prev_script = CScript() << OP_1 << zeros(32);
         // segwit: empty scriptsig
         tx_in.scriptSig = CScript();
-        tx_in.scriptWitness.stack.push_back(zeros(65)); // signature
+        tx_in.scriptWitness.stack.emplace_back(65); // signature
         std::vector<unsigned char> annex{0x50, 0, 0};
         tx_in.scriptWitness.stack.push_back(annex);
         auto [ret_script, scale] = GetScriptForTransactionInput(prev_script, tx_in);
@@ -1692,12 +1692,12 @@ BOOST_AUTO_TEST_CASE(script_GetScriptForTransactionInput)
         tx_in.scriptSig = CScript();
         // stack: zero or more arbitrary values (script arguments); script; control block
         // (here we have two arbitrary values)
-        tx_in.scriptWitness.stack.push_back(zeros(85)); // arbitrary value
-        tx_in.scriptWitness.stack.push_back(zeros(10)); // arbitrary value
+        tx_in.scriptWitness.stack.emplace_back(85); // arbitrary value
+        tx_in.scriptWitness.stack.emplace_back(10); // arbitrary value
         CScript script = CScript() << OP_7 << OP_8;
         auto script_vec{std::vector<unsigned char>(script.begin(), script.end())};
         tx_in.scriptWitness.stack.push_back(script_vec);
-        tx_in.scriptWitness.stack.push_back(zeros(33)); // control block
+        tx_in.scriptWitness.stack.emplace_back(33); // control block
         auto [ret_script, scale] = GetScriptForTransactionInput(prev_script, tx_in);
         BOOST_CHECK(ret_script == script);
         BOOST_CHECK_EQUAL(scale, 1);
@@ -1711,11 +1711,11 @@ BOOST_AUTO_TEST_CASE(script_GetScriptForTransactionInput)
         tx_in.scriptSig = CScript();
         // stack: zero or more arbitrary values (script arguments); script; control block
         // (here we have one arbitrary value)
-        tx_in.scriptWitness.stack.push_back(zeros(85)); // arbitrary value
+        tx_in.scriptWitness.stack.emplace_back(85); // arbitrary value
         CScript script = CScript() << OP_RETURN << OP_7 << OP_8;
         auto script_vec{std::vector<unsigned char>(script.begin(), script.end())};
         tx_in.scriptWitness.stack.push_back(script_vec);
-        tx_in.scriptWitness.stack.push_back(zeros(33)); // control block
+        tx_in.scriptWitness.stack.emplace_back(33); // control block
         auto [ret_script, scale] = GetScriptForTransactionInput(prev_script, tx_in);
         BOOST_CHECK(ret_script == script);
         BOOST_CHECK_EQUAL(scale, 1);
