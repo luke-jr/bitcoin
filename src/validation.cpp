@@ -3288,7 +3288,11 @@ bool Chainstate::ActivateBestChain(BlockValidationState& state, std::shared_ptr<
                     // Wipe cache, we may need another branch now.
                     pindexMostWork = nullptr;
                 }
-                pindexNewTip = m_chain.Tip();
+                auto new_tip = m_chain.Tip();
+                if (pindexNewTip != new_tip) {
+                    pindexNewTip = new_tip;
+                    new_tip_block = nullptr;
+                }
 
                 for (const PerBlockConnectTrace& trace : connectTrace.GetBlocksConnected()) {
                     assert(trace.pblock && trace.pindex);
