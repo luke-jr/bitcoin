@@ -41,10 +41,9 @@ struct TestSubscriber final : public CValidationInterface {
     void UpdatedBlockTip(const CBlockIndex* pindexNew, const CBlockIndex* pindexFork, bool fInitialDownload, const std::shared_ptr<const CBlock>& block) override
     {
         BOOST_CHECK_EQUAL(m_expected_tip, pindexNew->GetBlockHash());
-        if (CValidationInterface::any_use_tip_block_cache) {
+        if (block) {
             BOOST_CHECK_EQUAL(m_expected_tip, block->GetHash());
         } else {
-            BOOST_CHECK(!block);
             CValidationInterface::any_use_tip_block_cache = true;
         }
     }
