@@ -48,6 +48,8 @@ for relpath in BINARIES:
     # remaining lines are copyright
     copyright = r.stdout.split('\n')[1:]
     assert copyright[0].startswith('Copyright (C)')
+    if versions:
+        assert copyright == versions[0][2]
 
     versions.append((abspath, verstr, copyright))
 
@@ -57,19 +59,20 @@ if any(verstr.endswith('-dirty') for (_, verstr, _) in versions):
     print('To properly generate man pages, please commit your changes (or discard them), rebuild, then run this script again.')
     print()
 
-with tempfile.NamedTemporaryFile('w', suffix='.h2m') as footer:
-    # Create copyright footer, and write it to a temporary include file.
-    # Copyright is the same for all binaries, so just use the first.
-    footer.write('[COPYRIGHT]\n')
-    footer.write('\n'.join(versions[0][2]).strip())
-    # Create SEE ALSO section
-    footer.write('\n[SEE ALSO]\n')
-    footer.write(', '.join(s.rpartition('/')[2] + '(1)' for s in BINARIES))
-    footer.write('\n')
-    footer.flush()
+basename_binaries = tuple(s.rpartition('/')[2] for s in BINARIES)
 
-    # Call the binaries through help2man to produce a manual page for each of them.
-    for (abspath, verstr, _) in versions:
+for (abspath, verstr, copyright) in versions:
+    with tempfile.NamedTemporaryFile('w', suffix='.h2m') as footer:
+        # Create copyright footer, and write it to a temporary include file.
+        footer.write('[COPYRIGHT]\n')
+        footer.write('\n'.join(copyright).strip())
+        # Create SEE ALSO section
+        footer.write('\n[SEE ALSO]\n')
+        footer.write(', '.join(s + "(1)" for s in basename_binaries if not abspath.endswith("/" + s)))
+        footer.write('\n')
+        footer.flush()
+
+        # Call the binaries through help2man to produce a manual page for each of them.
         outname = os.path.join(mandir, os.path.basename(abspath) + '.1')
         print(f'Generating {outname}…')
         subprocess.run([help2man, '-N', '--version-string=' + verstr, '--include=' + footer.name, '-o', outname, abspath], check=True)
