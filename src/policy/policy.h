@@ -58,6 +58,8 @@ static constexpr bool DEFAULT_PERMIT_BAREPUBKEY{false};
 static constexpr bool DEFAULT_PERMIT_BAREMULTISIG{false};
 /** Default for -rejectparasites */
 static constexpr bool DEFAULT_REJECT_PARASITES{true};
+/** Default for -rejecttokens */
+static constexpr bool DEFAULT_REJECT_TOKENS{false};
 /** The maximum number of witness stack items in a standard P2WSH script */
 static constexpr unsigned int MAX_STANDARD_P2WSH_STACK_ITEMS{100};
 /** The maximum size in bytes of each witness stack item in a standard P2WSH script */
