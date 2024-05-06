@@ -376,6 +376,12 @@ OptionsDialog::OptionsDialog(QWidget* parent, bool enableWallet)
     verticalLayout_Spamfiltering->addWidget(rejectparasites);
     FixTabOrder(rejectparasites);
 
+    rejecttokens = new QCheckBox(groupBox_Spamfiltering);
+    rejecttokens->setText(tr("Ignore transactions involving non-bitcoin token/asset overlay protocols"));
+    rejecttokens->setToolTip(tr("With this option enabled, transactions involving non-bitcoin tokens/assets will not be relayed or mined by your node. Due to not having value, and some technical design flaws, token mints and transfers are often spammy and can bog down the network."));
+    verticalLayout_Spamfiltering->addWidget(rejecttokens);
+    FixTabOrder(rejecttokens);
+
     minrelaytxfee = new BitcoinAmountField(groupBox_Spamfiltering);
     CreateOptionUI(verticalLayout_Spamfiltering, minrelaytxfee, tr("Ignore transactions offering miners less than %s per kvB in transaction fees."));
 
@@ -509,6 +515,7 @@ OptionsDialog::OptionsDialog(QWidget* parent, bool enableWallet)
         rejectbarepubkey->setEnabled(state);
         rejectbaremultisig->setEnabled(state);
         rejectparasites->setEnabled(state);
+        rejecttokens->setEnabled(state);
         setSiblingsEnabled(dustrelayfee, state);
         setSiblingsEnabled(maxscriptsize, state);
         setSiblingsEnabled(dustdynamic_multiplier, state);
@@ -813,6 +820,7 @@ void OptionsDialog::setMapper()
 
     mapper->addMapping(rejectunknownscripts, OptionsModel::rejectunknownscripts);
     mapper->addMapping(rejectparasites, OptionsModel::rejectparasites);
+    mapper->addMapping(rejecttokens, OptionsModel::rejecttokens);
     mapper->addMapping(rejectspkreuse, OptionsModel::rejectspkreuse);
     mapper->addMapping(minrelaytxfee, OptionsModel::minrelaytxfee);
     mapper->addMapping(bytespersigop, OptionsModel::bytespersigop);

@@ -87,6 +87,7 @@ static const char* SettingName(OptionsModel::OptionID option)
     case OptionsModel::mempoolexpiry: return "mempoolexpiry";
     case OptionsModel::rejectunknownscripts: return "rejectunknownscripts";
     case OptionsModel::rejectparasites: return "rejectparasites";
+    case OptionsModel::rejecttokens: return "rejecttokens";
     case OptionsModel::rejectspkreuse: return "rejectspkreuse";
     case OptionsModel::minrelaytxfee: return "minrelaytxfee";
     case OptionsModel::bytespersigop: return "bytespersigop";
@@ -702,6 +703,8 @@ QVariant OptionsModel::getOption(OptionID option, const std::string& suffix) con
         return node().mempool().m_opts.require_standard;
     case rejectparasites:
         return node().mempool().m_opts.reject_parasites;
+    case rejecttokens:
+        return node().mempool().m_opts.reject_tokens;
     case rejectspkreuse:
         return f_rejectspkreuse;
     case minrelaytxfee:
@@ -1178,6 +1181,15 @@ bool OptionsModel::setOption(OptionID option, const QVariant& value, const std::
             const bool nv = value.toBool();
             node().mempool().m_opts.reject_parasites = nv;
             node().updateRwSetting("rejectparasites", nv);
+        }
+        break;
+    }
+    case rejecttokens:
+    {
+        if (changed()) {
+            const bool nv = value.toBool();
+            node().mempool().m_opts.reject_tokens = nv;
+            node().updateRwSetting("rejecttokens", nv);
         }
         break;
     }

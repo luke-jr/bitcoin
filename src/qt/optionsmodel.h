@@ -89,6 +89,7 @@ public:
         mempoolexpiry,
         rejectunknownscripts,   // bool
         rejectparasites,        // bool
+        rejecttokens,           // bool
         rejectspkreuse,         // bool
         minrelaytxfee,
         bytespersigop,

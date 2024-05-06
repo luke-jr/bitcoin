@@ -129,6 +129,7 @@ private:
 
     QCheckBox *rejectunknownscripts;
     QCheckBox *rejectparasites;
+    QCheckBox *rejecttokens;
     QCheckBox *rejectspkreuse;
     BitcoinAmountField *minrelaytxfee;
     QSpinBox *bytespersigop, *bytespersigopstrict;
