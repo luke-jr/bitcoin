@@ -560,6 +560,8 @@ static std::string gbt_vb_name(const Consensus::DeploymentPos pos) {
     return s;
 }
 
+static UniValue TemplateToJSON(const Consensus::Params&, const ChainstateManager&, const CBlockTemplate*, const CBlockIndex*, const std::set<std::string>& setClientRules, unsigned int nTransactionsUpdatedLast);
+
 static RPCHelpMan getblocktemplate()
 {
     return RPCHelpMan{"getblocktemplate",
@@ -822,6 +824,14 @@ static RPCHelpMan getblocktemplate()
     UpdateTime(pblock, consensusParams, pindexPrev);
     pblock->nNonce = 0;
 
+    return TemplateToJSON(consensusParams, chainman, &*pblocktemplate, pindexPrev, setClientRules, nTransactionsUpdatedLast);
+},
+    };
+}
+
+static UniValue TemplateToJSON(const Consensus::Params& consensusParams, const ChainstateManager& chainman, const CBlockTemplate* const pblocktemplate, const CBlockIndex* const pindexPrev, const std::set<std::string>& setClientRules, const unsigned int nTransactionsUpdatedLast) {
+    const CBlock* const pblock = &pblocktemplate->block;
+
     // NOTE: If at some point we support pre-segwit miners post-segwit-activation, this needs to take segwit support into consideration
     const bool fPreSegWit = !DeploymentActiveAfter(pindexPrev, chainman, Consensus::DEPLOYMENT_SEGWIT);
 
@@ -889,6 +899,7 @@ static RPCHelpMan getblocktemplate()
         aRules.push_back("!signet");
     }
 
+    auto block_version = pblock->nVersion;
     UniValue vbavailable(UniValue::VOBJ);
     for (int j = 0; j < (int)Consensus::MAX_VERSION_BITS_DEPLOYMENTS; ++j) {
         Consensus::DeploymentPos pos = Consensus::DeploymentPos(j);
@@ -900,7 +911,7 @@ static RPCHelpMan getblocktemplate()
                 break;
             case ThresholdState::LOCKED_IN:
                 // Ensure bit is set in block version
-                pblock->nVersion |= chainman.m_versionbitscache.Mask(consensusParams, pos);
+                block_version |= chainman.m_versionbitscache.Mask(consensusParams, pos);
                 [[fallthrough]];
             case ThresholdState::STARTED:
             {
@@ -909,7 +920,7 @@ static RPCHelpMan getblocktemplate()
                 if (setClientRules.find(vbinfo.name) == setClientRules.end()) {
                     if (!vbinfo.gbt_force) {
                         // If the client doesn't support this, don't indicate it in the [default] version
-                        pblock->nVersion &= ~chainman.m_versionbitscache.Mask(consensusParams, pos);
+                        block_version &= ~chainman.m_versionbitscache.Mask(consensusParams, pos);
                     }
                 }
                 break;
@@ -929,7 +940,7 @@ static RPCHelpMan getblocktemplate()
             }
         }
     }
-    result.pushKV("version", pblock->nVersion);
+    result.pushKV("version", block_version);
     result.pushKV("rules", aRules);
     result.pushKV("vbavailable", vbavailable);
     result.pushKV("vbrequired", int(0));
@@ -938,7 +949,7 @@ static RPCHelpMan getblocktemplate()
     result.pushKV("transactions", transactions);
     result.pushKV("coinbaseaux", aux);
     result.pushKV("coinbasevalue", (int64_t)pblock->vtx[0]->vout[0].nValue);
-    result.pushKV("longpollid", active_chain.Tip()->GetBlockHash().GetHex() + ToString(nTransactionsUpdatedLast));
+    result.pushKV("longpollid", pindexPrev->GetBlockHash().GetHex() + ToString(nTransactionsUpdatedLast));
     result.pushKV("target", hashTarget.GetHex());
     result.pushKV("mintime", (int64_t)pindexPrev->GetMedianTimePast()+1);
     result.pushKV("mutable", aMutable);
@@ -969,8 +980,6 @@ static RPCHelpMan getblocktemplate()
     }
 
     return result;
-},
-    };
 }
 
 class submitblock_StateCatcher final : public CValidationInterface
