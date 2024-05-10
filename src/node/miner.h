@@ -170,6 +170,15 @@ public:
         bool test_block_validity{true};
 
         BlockAssembler::Options Clamped() const;
+
+        bool operator==(const Options &rhs) const {
+            return (
+                nBlockMaxWeight == rhs.nBlockMaxWeight &&
+                nBlockMaxSize == rhs.nBlockMaxSize &&
+                blockMinFeeRate == rhs.blockMinFeeRate &&
+                test_block_validity == rhs.test_block_validity
+            );
+        }
     };
 
     explicit BlockAssembler(Chainstate& chainstate, const CTxMemPool* mempool);
