@@ -173,6 +173,9 @@ BITCOIN_TESTS =\
   test/versionbits_tests.cpp \
   test/xoroshiro128plusplus_tests.cpp
 
+BITCOIN_TESTS += \
+  stats/test/stats_tests.cpp
+
 if ENABLE_WALLET
 BITCOIN_TESTS += \
   wallet/test/feebumper_tests.cpp \
