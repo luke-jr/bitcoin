@@ -10,6 +10,7 @@
 #include <memory>
 #include <string>
 
+class CBlock;
 class CBlockIndex;
 class CTransaction;
 class CZMQAbstractNotifier;
@@ -45,7 +46,7 @@ public:
     virtual void Shutdown() = 0;
 
     // Notifies of ConnectTip result, i.e., new active tip only
-    virtual bool NotifyBlock(const CBlockIndex *pindex);
+    virtual bool NotifyBlock(const std::shared_ptr<const CBlock>& block);
     // Notifies of every block connection
     virtual bool NotifyBlockConnect(const CBlockIndex *pindex);
     // Notifies of every block disconnection

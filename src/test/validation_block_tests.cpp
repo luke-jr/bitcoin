@@ -38,9 +38,14 @@ struct TestSubscriber final : public CValidationInterface {
 
     explicit TestSubscriber(uint256 tip) : m_expected_tip(tip) {}
 
-    void UpdatedBlockTip(const CBlockIndex* pindexNew, const CBlockIndex* pindexFork, bool fInitialDownload) override
+    void UpdatedBlockTip(const CBlockIndex* pindexNew, const CBlockIndex* pindexFork, bool fInitialDownload, const std::shared_ptr<const CBlock>& block) override
     {
         BOOST_CHECK_EQUAL(m_expected_tip, pindexNew->GetBlockHash());
+        if (block) {
+            BOOST_CHECK_EQUAL(m_expected_tip, block->GetHash());
+        } else {
+            CValidationInterface::any_use_tip_block_cache = true;
+        }
     }
 
     void BlockConnected(ChainstateRole role, const std::shared_ptr<const CBlock>& block, const CBlockIndex* pindex) override
@@ -148,6 +153,8 @@ void MinerTestingSetup::BuildChain(const uint256& root, int height, const unsign
 
 BOOST_AUTO_TEST_CASE(processnewblock_signals_ordering)
 {
+    Assert(!CValidationInterface::any_use_tip_block_cache);
+
     // build a large-ish chain that's likely to have some forks
     std::vector<std::shared_ptr<const CBlock>> blocks;
     while (blocks.size() < 50) {
@@ -199,6 +206,8 @@ BOOST_AUTO_TEST_CASE(processnewblock_signals_ordering)
     SyncWithValidationInterfaceQueue();
 
     UnregisterSharedValidationInterface(sub);
+
+    CValidationInterface::any_use_tip_block_cache = false;
 
     LOCK(cs_main);
     BOOST_CHECK_EQUAL(sub->m_expected_tip, m_node.chainman->ActiveChain().Tip()->GetBlockHash());

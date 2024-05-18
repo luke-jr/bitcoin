@@ -3244,6 +3244,7 @@ bool Chainstate::ActivateBestChain(BlockValidationState& state, std::shared_ptr<
 
     CBlockIndex *pindexMostWork = nullptr;
     CBlockIndex *pindexNewTip = nullptr;
+    std::shared_ptr<const CBlock> new_tip_block{nullptr};
     bool exited_ibd{false};
     do {
         // Block until the validation queue drains. This should largely
@@ -3287,11 +3288,19 @@ bool Chainstate::ActivateBestChain(BlockValidationState& state, std::shared_ptr<
                     // Wipe cache, we may need another branch now.
                     pindexMostWork = nullptr;
                 }
-                pindexNewTip = m_chain.Tip();
+                auto new_tip = m_chain.Tip();
+                if (pindexNewTip != new_tip) {
+                    pindexNewTip = new_tip;
+                    new_tip_block = nullptr;
+                }
 
                 for (const PerBlockConnectTrace& trace : connectTrace.GetBlocksConnected()) {
                     assert(trace.pblock && trace.pindex);
                     GetMainSignals().BlockConnected(this->GetRole(), trace.pblock, trace.pindex);
+                    // Avoid keeping the CBlock around longer than we have to
+                    if (trace.pindex == pindexNewTip && CValidationInterface::any_use_tip_block_cache) {
+                        new_tip_block = trace.pblock;
+                    }
                 }
 
                 // This will have been toggled in
@@ -3317,7 +3326,7 @@ bool Chainstate::ActivateBestChain(BlockValidationState& state, std::shared_ptr<
             // Enqueue while holding cs_main to ensure that UpdatedBlockTip is called in the order in which blocks are connected
             if (this == &m_chainman.ActiveChainstate() && pindexFork != pindexNewTip) {
                 // Notify ValidationInterface subscribers
-                GetMainSignals().UpdatedBlockTip(pindexNewTip, pindexFork, still_in_ibd);
+                GetMainSignals().UpdatedBlockTip(pindexNewTip, pindexFork, still_in_ibd, new_tip_block);
 
                 // Always notify the UI if a new block tip was connected
                 if (kernel::IsInterrupted(m_chainman.GetNotifications().blockTip(GetSynchronizationState(still_in_ibd), *pindexNewTip))) {
