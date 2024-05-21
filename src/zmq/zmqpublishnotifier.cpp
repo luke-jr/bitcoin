@@ -5,13 +5,11 @@
 #include <zmq/zmqpublishnotifier.h>
 
 #include <chain.h>
-#include <chainparams.h>
 #include <crypto/common.h>
 #include <kernel/cs_main.h>
 #include <logging.h>
 #include <netaddress.h>
 #include <netbase.h>
-#include <node/blockstorage.h>
 #include <primitives/block.h>
 #include <primitives/transaction.h>
 #include <rpc/server.h>
@@ -33,10 +31,6 @@
 #include <string>
 #include <utility>
 #include <vector>
-
-namespace Consensus {
-struct Params;
-}
 
 static std::multimap<std::string, CZMQAbstractPublishNotifier*> mapPublishNotifiers;
 
@@ -217,9 +211,9 @@ bool CZMQAbstractPublishNotifier::SendZmqMessage(const char *command, const void
     return true;
 }
 
-bool CZMQPublishHashBlockNotifier::NotifyBlock(const CBlockIndex *pindex)
+bool CZMQPublishHashBlockNotifier::NotifyBlock(const std::shared_ptr<const CBlock>& block)
 {
-    uint256 hash = pindex->GetBlockHash();
+    uint256 hash = block->GetHash();
     LogPrint(BCLog::ZMQ, "Publish hashblock %s to %s\n", hash.GetHex(), this->address);
     uint8_t data[32];
     for (unsigned int i = 0; i < 32; i++) {
@@ -239,19 +233,11 @@ bool CZMQPublishHashTransactionNotifier::NotifyTransaction(const CTransaction &t
     return SendZmqMessage(MSG_HASHTX, data, 32);
 }
 
-bool CZMQPublishRawBlockNotifier::NotifyBlock(const CBlockIndex *pindex)
+bool CZMQPublishRawBlockNotifier::NotifyBlock(const std::shared_ptr<const CBlock>& block)
 {
-    LogPrint(BCLog::ZMQ, "Publish rawblock %s to %s\n", pindex->GetBlockHash().GetHex(), this->address);
-
+    LogPrint(BCLog::ZMQ, "Publish rawblock %s to %s\n", block->GetHash().GetHex(), this->address);
     DataStream ss;
-    CBlock block;
-    if (!m_get_block_by_index(block, *pindex)) {
-        zmqError("Can't read block from disk");
-        return false;
-    }
-
     ss << TX_WITH_WITNESS(block);
-
     return SendZmqMessage(MSG_RAWBLOCK, &(*ss.begin()), ss.size());
 }
 
