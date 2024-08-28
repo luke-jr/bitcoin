@@ -205,8 +205,6 @@ RPCHelpMan getbalance()
 
     bool avoid_reuse = GetAvoidReuseFlag(*pwallet, request.params[3]);
 
-    const auto bal = GetBalance(*pwallet, min_depth, avoid_reuse);
-
     if (dummy_value) {
         return ValueFromAmount(pwallet->GetLegacyBalance(min_depth));
     }
@@ -214,6 +212,9 @@ RPCHelpMan getbalance()
     if (!request.params[1].isNull()) {
         throw JSONRPCError(RPC_INVALID_PARAMETER, "getbalance minconf option is only currently supported if dummy is set to \"*\"");
     }
+
+    const auto bal = GetBalance(*pwallet, min_depth, avoid_reuse);
+
     return ValueFromAmount(bal.m_mine_trusted);
 },
     };
