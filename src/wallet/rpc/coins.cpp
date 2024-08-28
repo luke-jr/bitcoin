@@ -206,6 +206,7 @@ RPCHelpMan getbalance()
     bool avoid_reuse = GetAvoidReuseFlag(*pwallet, request.params[3]);
 
     if (dummy_value) {
+        if (avoid_reuse) throw JSONRPCError(RPC_INVALID_PARAMETER, "getbalance avoid_reuse flag is not supported if dummy is set to \"*\"");
         return ValueFromAmount(pwallet->GetLegacyBalance(min_depth));
     }
 
