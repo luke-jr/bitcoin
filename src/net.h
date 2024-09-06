@@ -1281,9 +1281,6 @@ public:
 
     bool MultipleManualOrFullOutboundConns(Network net) const EXCLUSIVE_LOCKS_REQUIRED(m_nodes_mutex);
 
-    /* Returns true if outbound v1 connections need to be disabled on IPV4/IPV6 network. */
-    bool RequiresV2ForOutbound(Network net) const;
-
 private:
     struct ListenSocket {
     public:
@@ -1413,6 +1410,24 @@ private:
      * @return           bool        Whether a preferred network was found.
      */
     bool MaybePickPreferredNetwork(std::optional<Network>& network);
+
+    /**
+     * Whether an outbound connection to this destination must be v2 only.
+     *
+     * Returns true when -v2onlyclearnet is set AND either:
+     *   - the resolved address is clearnet (IPv4/IPv6) OR
+     *   - the address is unresolved and a destination string was supplied.
+     *     if bitcoind delegates DNS to a name proxy (ex: Tor), we can't tell
+     *     locally whether the name resolves to clearnet or not, so we assume
+     *     the worst case and require v2 to avoid sending plaintext.
+     *
+     * Connections to non-routable (local/loopback) addresses can be v1 since
+     * their traffic never leaves the LAN.
+     *
+     * @param addr      target address (maybe unresolved)
+     * @param dest_name destination string (or empty if connecting by resolved address)
+     */
+    bool RequiresV2ForOutbound(const CNetAddr& addr, std::string_view dest_name) const;
 
     // Whether the node should be passed out in ForEach* callbacks
     static bool NodeFullyConnected(const CNode* pnode);
@@ -1609,9 +1624,9 @@ private:
     bool m_capture_messages{false};
 
     /**
-     * option for disabling outbound v1 connections on IPV4 and IPV6.
-     * outbound connections on IPV4/IPV6 need to be v2 connections.
-     * outbound connections on Tor/I2P/CJDNS can be v1 or v2 connections.
+     * option for restricting outbound clearnet connections (IPv4/IPv6) to v2 only.
+     * outbound connections to IPv4/IPv6 need to be v2 connections.
+     * outbound connections to Tor/I2P/CJDNS can be v1 or v2 connections.
      */
     bool m_v2only_clearnet{DEFAULT_V2_ONLY_CLEARNET};
 
