@@ -2320,9 +2320,6 @@ static RPCHelpMan scantxoutset()
     };
 }
 
-static GlobalMutex cs_relevant_blocks;
-static UniValue g_relevant_blocks GUARDED_BY(cs_relevant_blocks);
-
 /** RAII object to prevent concurrency issue when scanning blockfilters */
 static std::atomic<int> g_scanfilter_progress;
 static std::atomic<int> g_scanfilter_progress_height;
@@ -2431,6 +2428,9 @@ static RPCHelpMan scanblocks()
         },
         [&](const RPCHelpMan& self, const JSONRPCRequest& request) -> UniValue
 {
+    static GlobalMutex cs_relevant_blocks;
+    static UniValue g_relevant_blocks GUARDED_BY(cs_relevant_blocks);
+
     UniValue ret(UniValue::VOBJ);
     if (request.params[0].get_str() == "status") {
         BlockFiltersScanReserver reserver;
