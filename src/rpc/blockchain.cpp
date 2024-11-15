@@ -2344,9 +2344,17 @@ public:
         return true;
     }
 
+    void release() {
+        if (!m_could_reserve) {
+            throw std::runtime_error("Attempt to release unreserved BlockFiltersScanReserver");
+        }
+        g_scanfilter_in_progress = false;
+        m_could_reserve = false;
+    }
+
     ~BlockFiltersScanReserver() {
         if (m_could_reserve) {
-            g_scanfilter_in_progress = false;
+            release();
         }
     }
 };
@@ -2426,13 +2434,13 @@ static RPCHelpMan scanblocks()
     UniValue ret(UniValue::VOBJ);
     if (request.params[0].get_str() == "status") {
         BlockFiltersScanReserver reserver;
+        LOCK(cs_relevant_blocks);
         if (reserver.reserve()) {
             // no scan in progress
             return NullUniValue;
         }
         ret.pushKV("progress", g_scanfilter_progress.load());
         ret.pushKV("current_height", g_scanfilter_progress_height.load());
-        LOCK(cs_relevant_blocks);
         ret.pushKV("relevant_blocks", g_relevant_blocks);
         return ret;
     } else if (request.params[0].get_str() == "abort") {
@@ -2565,8 +2573,9 @@ static RPCHelpMan scanblocks()
         ret.pushKV("from_height", start_block_height);
         ret.pushKV("to_height", start_index->nHeight); // start_index is always the last scanned block here
         LOCK(cs_relevant_blocks);
-        ret.pushKV("relevant_blocks", g_relevant_blocks);
+        ret.pushKV("relevant_blocks", std::move(g_relevant_blocks));
         ret.pushKV("completed", completed);
+        reserver.release();  // ensure this is before cs_relevant_blocks is released
     }
     else {
         throw JSONRPCError(RPC_INVALID_PARAMETER, strprintf("Invalid action '%s'", request.params[0].get_str()));
