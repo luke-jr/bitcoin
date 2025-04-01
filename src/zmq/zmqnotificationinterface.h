@@ -15,7 +15,7 @@ class CZMQAbstractNotifier;
 class CZMQNotificationInterface : public CValidationInterface
 {
 public:
-    virtual ~CZMQNotificationInterface();
+    ~CZMQNotificationInterface();
 
     static CZMQNotificationInterface* CreateWithArguments(const std::map<std::string, std::string> &args);
 
