@@ -28,7 +28,7 @@ CacheSizes CalculateCacheSizes(const ArgsManager& args, size_t n_indexes)
     if (std::optional<int64_t> db_cache = args.GetIntArg("-dbcache")) {
         if (*db_cache < 0) db_cache = 0;
         uint64_t db_cache_bytes = SaturatingLeftShift<uint64_t>(*db_cache, 20);
-        total_cache = std::max<size_t>(MIN_DB_CACHE, std::min<uint64_t>(db_cache_bytes, std::numeric_limits<size_t>::max()));
+        total_cache = std::max<size_t>(MIN_DB_CACHE, std::min<uint64_t>(db_cache_bytes, MAX_DB_CACHE));
     }
 
     IndexCacheSizes index_sizes;
