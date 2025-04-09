@@ -59,7 +59,7 @@ if(HAVE_ARM_SHANI)
   )
 endif()
 
-if(HAVE_POWER8_VECTOR)
+if(ENABLE_POWER8)
   target_compile_definitions(bitcoin_crypto PRIVATE ENABLE_POWER8)
   target_sources(bitcoin_crypto PRIVATE sha256_power8.cpp)
   set_property(SOURCE sha256_power8.cpp PROPERTY
