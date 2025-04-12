@@ -638,7 +638,7 @@ class WalletMigrationTest(BitcoinTestFramework):
         assert Path(old_path / "wallet.dat").exists()
         assert Path(master_path / "wallet.dat").exists()
 
-        backup_prefix = "default_wallet" if is_default else wallet_name
+        backup_prefix = "default_wallet" if is_default else os.path.basename(os.path.abspath(master_path))
         backup_path = master_path / f"{backup_prefix}_{mocked_time}.legacy.bak"
         assert backup_path.exists()
 
