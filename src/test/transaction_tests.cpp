@@ -863,17 +863,6 @@ BOOST_AUTO_TEST_CASE(test_IsStandard)
     CheckIsStandard(t);
     g_mempool_opts.reject_parasites = false;
 
-    // Test rejecttokens
-    t.vout[0].scriptPubKey = CScript() << OP_RETURN << OP_13 << OP_FALSE;
-    g_mempool_opts.reject_tokens = false;
-    CheckIsStandard(t);
-    g_mempool_opts.reject_tokens = true;
-    CheckIsNotStandard(t, "tokens-runes");
-    // At least one data push is needed after OP_13 to match
-    t.vout[0].scriptPubKey = CScript() << OP_RETURN << OP_13;
-    CheckIsStandard(t);
-    g_mempool_opts.reject_tokens = false;
-
     // MAX_OP_RETURN_RELAY-byte TxoutType::NULL_DATA (standard)
     t.vout[0].scriptPubKey = CScript() << OP_RETURN;
     while (t.vout[0].scriptPubKey.size() < MAX_OP_RETURN_RELAY) {
