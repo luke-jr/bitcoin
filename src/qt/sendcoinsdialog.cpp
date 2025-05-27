@@ -861,7 +861,7 @@ void SendCoinsDialog::updateCoinControlState()
 }
 
 void SendCoinsDialog::updateNumberOfBlocks(int count, const QDateTime& blockDate, double nVerificationProgress, SyncType synctype, SynchronizationState sync_state) {
-    if (sync_state == SynchronizationState::POST_INIT) {
+    if (sync_state == SynchronizationState::POST_INIT && clientModel) {
         updateSmartFeeLabel();
     }
 }
