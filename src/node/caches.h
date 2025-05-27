@@ -9,11 +9,14 @@
 #include <util/byte_units.h>
 
 #include <cstddef>
+#include <limits>
 
 class ArgsManager;
 
 //! min. -dbcache (bytes)
 static constexpr size_t MIN_DB_CACHE{4_MiB};
+//! max. -dbcache (bytes)
+static constexpr size_t MAX_DB_CACHE{sizeof(void*) > 4 ? 1048576_MiB : 3000_MiB};
 //! -dbcache default (bytes)
 static constexpr size_t DEFAULT_DB_CACHE{DEFAULT_KERNEL_CACHE};
 
