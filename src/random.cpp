@@ -41,7 +41,7 @@
 #ifdef HAVE_SYSCTL_ARND
 #include <sys/sysctl.h>
 #endif
-#if defined(HAVE_STRONG_GETAUXVAL) && defined(__aarch64__)
+#if 0
 #include <sys/auxv.h>
 #endif
 
@@ -189,7 +189,7 @@ uint64_t GetRdSeed() noexcept
 #endif
 }
 
-#elif defined(__aarch64__) && defined(HWCAP2_RNG)
+#elif 0
 
 bool g_rndr_supported = false;
 
@@ -263,7 +263,7 @@ void SeedHardwareFast(CSHA512& hasher) noexcept {
         hasher.Write((const unsigned char*)&out, sizeof(out));
         return;
     }
-#elif defined(__aarch64__) && defined(HWCAP2_RNG)
+#elif 0
     if (g_rndr_supported) {
         uint64_t out = GetRNDR();
         hasher.Write((const unsigned char*)&out, sizeof(out));
@@ -294,7 +294,7 @@ void SeedHardwareSlow(CSHA512& hasher) noexcept {
         }
         return;
     }
-#elif defined(__aarch64__) && defined(HWCAP2_RNG)
+#elif 0
     if (g_rndr_supported) {
         for (int i = 0; i < 4; ++i) {
             uint64_t out = GetRNDRRS();
