@@ -1703,6 +1703,7 @@ bool AppInitMain(NodeContext& node, interfaces::BlockAndHeaderTipInfo* tip_info)
         if (!Assert(node.shutdown_signal)->reset()) {
             LogError("Internal error: failed to reset shutdown signal.\n");
         }
+        node.chainman.reset();
         std::tie(status, error) = InitAndLoadChainstate(
             node,
             do_reindex,
