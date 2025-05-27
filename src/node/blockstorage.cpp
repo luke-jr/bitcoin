@@ -31,6 +31,7 @@
 #include <util/batchpriority.h>
 #include <util/check.h>
 #include <util/fs.h>
+#include <util/ioprio.h>
 #include <util/overflow.h>
 #include <util/signalinterrupt.h>
 #include <util/strencodings.h>
@@ -1124,13 +1125,13 @@ bool BlockManager::WriteBlockUndo(const CBlockUndo& blockundo, BlockValidationSt
     return true;
 }
 
-bool BlockManager::ReadBlock(CBlock& block, const FlatFilePos& pos) const
+bool BlockManager::ReadBlock(CBlock& block, const FlatFilePos& pos, const bool lowprio) const
 {
     block.SetNull();
 
     // Open history file to read
     std::vector<uint8_t> block_data;
-    if (!ReadRawBlock(block_data, pos)) {
+    if (!ReadRawBlock(block_data, pos, /*lowprio=*/lowprio)) {
         return false;
     }
 
@@ -1157,11 +1158,11 @@ bool BlockManager::ReadBlock(CBlock& block, const FlatFilePos& pos) const
     return true;
 }
 
-bool BlockManager::ReadBlock(CBlock& block, const CBlockIndex& index) const
+bool BlockManager::ReadBlock(CBlock& block, const CBlockIndex& index, const bool lowprio) const
 {
     const FlatFilePos block_pos{WITH_LOCK(cs_main, return index.GetBlockPos())};
 
-    if (!ReadBlock(block, block_pos)) {
+    if (!ReadBlock(block, block_pos, lowprio)) {
         return false;
     }
     if (block.GetHash() != index.GetBlockHash()) {
@@ -1171,7 +1172,7 @@ bool BlockManager::ReadBlock(CBlock& block, const CBlockIndex& index) const
     return true;
 }
 
-bool BlockManager::ReadRawBlock(std::vector<uint8_t>& block, const FlatFilePos& pos) const
+bool BlockManager::ReadRawBlock(std::vector<uint8_t>& block, const FlatFilePos& pos, const bool lowprio) const
 {
     if (pos.nPos < BLOCK_SERIALIZATION_HEADER_SIZE) {
         // If nPos is less than BLOCK_SERIALIZATION_HEADER_SIZE, we can't read the header that precedes the block data
@@ -1180,6 +1181,9 @@ bool BlockManager::ReadRawBlock(std::vector<uint8_t>& block, const FlatFilePos& 
         LogError("%s: OpenBlockFile failed for %s\n", __func__, pos.ToString());
         return false;
     }
+
+    IOPRIO_IDLER(lowprio);
+
     AutoFile filein{OpenBlockFile({pos.nFile, pos.nPos - BLOCK_SERIALIZATION_HEADER_SIZE}, /*fReadOnly=*/true)};
     if (filein.IsNull()) {
         LogError("%s: OpenBlockFile failed for %s\n", __func__, pos.ToString());
