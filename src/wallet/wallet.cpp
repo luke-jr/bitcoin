@@ -4731,23 +4731,22 @@ util::Result<MigrationResult> MigrateLegacyToDescriptor(std::shared_ptr<CWallet>
 
 
     if (success) {
-        // Migration successful, unload all wallets locally, then reload them.
-        // Reload the main wallet
         LogInfo("Loading new wallets after migration...\n");
-        track_for_cleanup(*local_wallet);
-        success = reload_wallet(local_wallet);
+        // Migration successful, unload all wallets locally, then reload them.
+        // Note: We use a pointer to the shared_ptr to avoid increasing its reference count,
+        // as 'reload_wallet' expects to be the sole owner (use_count == 1).
+        for (std::shared_ptr<CWallet>* wallet_ptr : {&local_wallet, &res.watchonly_wallet, &res.solvables_wallet}) {
+            if (success && *wallet_ptr) {
+                std::shared_ptr<CWallet>& wallet = *wallet_ptr;
+                // Save db path and reload wallet
+                track_for_cleanup(*wallet);
+                success = reload_wallet(wallet);
+            }
+        }
+
+        // Set main wallet
         res.wallet = local_wallet;
         res.wallet_name = wallet_name;
-        if (success && res.watchonly_wallet) {
-            // Reload watchonly
-            track_for_cleanup(*res.watchonly_wallet);
-            success = reload_wallet(res.watchonly_wallet);
-        }
-        if (success && res.solvables_wallet) {
-            // Reload solvables
-            track_for_cleanup(*res.solvables_wallet);
-            success = reload_wallet(res.solvables_wallet);
-        }
     }
     if (!success) {
         // Migration failed, cleanup
