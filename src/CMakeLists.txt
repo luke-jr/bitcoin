@@ -26,8 +26,10 @@ if (ENABLE_IPC AND NOT WITH_EXTERNAL_LIBMULTIPROCESS)
   include(../cmake/libmultiprocess.cmake)
   add_libmultiprocess(ipc/libmultiprocess)
 endif()
+if(NOT WITH_SYSTEM_LIBSECP256K1)
 include(../cmake/secp256k1.cmake)
 add_secp256k1(secp256k1)
+endif()  # WITH_SYSTEM_LIBSECP256K1
 
 # Set top-level target output locations.
 if(NOT CMAKE_RUNTIME_OUTPUT_DIRECTORY)
