@@ -96,7 +96,11 @@ QImage QRImageWidget::exportImage()
         return QImage();
     }
 
+#if (QT_VERSION >= QT_VERSION_CHECK(5, 15, 0))
     return this->pixmap(Qt::ReturnByValue).toImage();
+#else
+    return this->pixmap()->toImage();
+#endif
 }
 
 void QRImageWidget::mousePressEvent(QMouseEvent *event)
