@@ -94,7 +94,8 @@ target_link_libraries(bitcoinkernel
     Boost::headers
 )
 
-target_include_directories(bitcoinkernel PRIVATE $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/src/leveldb/include>)
+get_target_property(LEVELDB_PUBLIC_INCLUDES leveldb INTERFACE_INCLUDE_DIRECTORIES)
+target_include_directories(bitcoinkernel PRIVATE ${LEVELDB_PUBLIC_INCLUDES})
 
 # libbitcoinkernel requires default symbol visibility, explicitly
 # specify that here so that things still work even when user
