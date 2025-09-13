@@ -1479,11 +1479,22 @@ void CWallet::transactionRemovedFromMempool(const CTransactionRef& tx, MemPoolRe
 
 void CWallet::blockConnected(ChainstateRole role, const interfaces::BlockInfo& block)
 {
-    if (role == ChainstateRole::BACKGROUND) {
-        return;
-    }
     assert(block.data);
     LOCK(cs_wallet);
+
+    switch (role) {
+        case ChainstateRole::BACKGROUND:
+            m_background_validation_height = block.height;
+            return;
+        case ChainstateRole::ASSUMEDVALID:
+            if (m_background_validation_height == -1) {
+                m_background_validation_height = 0;
+            }
+            break;
+        case ChainstateRole::NORMAL:
+            m_background_validation_height = -1;
+            break;
+    } // no default case, so the compiler can warn about missing cases
 
     // Update the best block in memory first. This will set the best block's height, which is
     // needed by MarkConflicted.
@@ -3274,6 +3285,18 @@ bool CWallet::IsTxImmatureCoinBase(const CWalletTx& wtx) const
     // note GetBlocksToMaturity is 0 for non-coinbase tx
     return GetTxBlocksToMaturity(wtx) > 0;
 }
+
+bool CWallet::IsTxAssumed(const CWalletTx& wtx) const EXCLUSIVE_LOCKS_REQUIRED(cs_wallet)
+{
+    AssertLockHeld(cs_wallet);
+    if (GetBackgroundValidationHeight() == -1) return false;
+    if (auto* conf = wtx.state<TxStateConfirmed>()) {
+        int height{conf->confirmed_block_height};
+        return height > GetBackgroundValidationHeight();
+    }
+    return false;
+}
+
 
 bool CWallet::IsCrypted() const
 {
