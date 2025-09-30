@@ -413,10 +413,9 @@ FUZZ_TARGET(tx_pool, .init = initialize_tx_pool)
             tx_pool.PrioritiseTransaction(txid.ToUint256(), delta);
         }
 
-        const bool bypass_limits{fuzzed_data_provider.ConsumeBool()};
-        ever_bypassed_limits |= bypass_limits;
-
         const auto tx = MakeTransactionRef(mut_tx);
+        const bool bypass_limits = fuzzed_data_provider.ConsumeBool();
+        ever_bypassed_limits |= bypass_limits;
         const auto res = WITH_LOCK(::cs_main, return AcceptToMemoryPool(chainstate, tx, GetTime(), bypass_limits, /*test_accept=*/false));
         const bool accepted = res.m_result_type == MempoolAcceptResult::ResultType::VALID;
         if (accepted) {
