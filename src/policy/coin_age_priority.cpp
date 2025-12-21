@@ -108,7 +108,7 @@ CTxMemPoolEntry::GetPriority(unsigned int currentHeight) const
     // This will only return accurate results when currentHeight >= the heights
     // at which all the in-chain inputs of the tx were included in blocks.
     // Typical usage of GetPriority with chainActive.Height() will ensure this.
-    int heightDiff = currentHeight - cachedHeight;
+    int heightDiff = int(currentHeight) - int(cachedHeight);
     double deltaPriority = ((double)heightDiff*inChainInputValue)/nModSize;
     double dResult = cachedPriority + deltaPriority;
     if (dResult < 0) // This should only happen if it was called with an invalid height
