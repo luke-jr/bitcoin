@@ -5,7 +5,9 @@
 """Test mempool limiting together/eviction with the wallet."""
 
 from decimal import Decimal
+import time
 
+from test_framework.authproxy import JSONRPCException
 from test_framework.mempool_util import (
     fill_mempool,
 )
@@ -200,12 +202,42 @@ class MempoolLimitTest(BitcoinTestFramework):
         # Mempool transaction which is evicted due to being at the "bottom" of the mempool when the
         # mempool overflows and evicts by descendant score. It's important that the eviction doesn't
         # happen in the middle of package evaluation, as it can invalidate the coins cache.
-        mempool_evicted_tx = self.wallet.send_self_transfer(
-            from_node=node,
-            fee_rate=mempoolmin_feerate,
-            target_vsize=evicted_vsize,
-            confirmed_only=True
-        )
+        #
+        # NOTE: On 32-bit systems (i686), there's a race condition where concurrent transaction additions
+        # can cause the mempool to repeatedly exceed the limit, causing immediate eviction of low-fee
+        # transactions. We retry with exponential backoff to handle this scenario.
+        mempool_evicted_tx = None
+        max_retries = 20
+        for attempt in range(max_retries):
+            try:
+                # Brief backoff on retries to let concurrent operations settle
+                if attempt > 0:
+                    backoff = min(0.05 * (2 ** (attempt - 1)), 2.0)  # Exponential backoff, max 2 seconds
+                    self.log.info(f"Retry attempt {attempt + 1}/{max_retries} after {backoff:.2f}s backoff...")
+                    time.sleep(backoff)
+                    # Rescan UTXOs to recover any that failed to be added
+                    self.wallet.rescan_utxos()
+                    # Update minimum feerate as it may have increased during retries
+                    mempoolmin_feerate = node.getmempoolinfo()["mempoolminfee"]
+
+                mempool_evicted_tx = self.wallet.send_self_transfer(
+                    from_node=node,
+                    fee_rate=mempoolmin_feerate,
+                    target_vsize=evicted_vsize,
+                    confirmed_only=True
+                )
+                if attempt > 0:
+                    self.log.info(f"Successfully added transaction on attempt {attempt + 1}")
+                break
+            except JSONRPCException as e:
+                if e.error['code'] == -26:  # mempool full or min fee not met
+                    if attempt < max_retries - 1:
+                        continue
+                    else:
+                        self.log.error(f"Failed to add transaction after {max_retries} attempts due to race condition")
+                raise
+
+        assert mempool_evicted_tx is not None, "Failed to add transaction after retries"
         # Already in mempool when package is submitted.
         assert mempool_evicted_tx["txid"] in node.getrawmempool()
 
