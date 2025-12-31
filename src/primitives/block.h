@@ -22,7 +22,7 @@ class CBlockHeader
 {
 public:
     // header
-    int32_t nVersion;
+    uint32_t nVersion;
     uint256 hashPrevBlock;
     uint256 hashMerkleRoot;
     uint32_t nTime;

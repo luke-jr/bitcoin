@@ -415,12 +415,12 @@ class CBlockLocator:
         self.vHave = []
 
     def deserialize(self, f):
-        int.from_bytes(f.read(4), "little", signed=True)  # Ignore version field.
+        int.from_bytes(f.read(4), "little")  # Ignore version field.
         self.vHave = deser_uint256_vector(f)
 
     def serialize(self):
         r = b""
-        r += (0).to_bytes(4, "little", signed=True)  # Bitcoin Core ignores the version field. Set it to 0.
+        r += (0).to_bytes(4, "little")  # Bitcoin Core ignores the version field. Set it to 0.
         r += ser_uint256_vector(self.vHave)
         return r
 
@@ -719,7 +719,7 @@ class CBlockHeader:
         self.hash = None
 
     def deserialize(self, f):
-        self.nVersion = int.from_bytes(f.read(4), "little", signed=True)
+        self.nVersion = int.from_bytes(f.read(4), "little")
         self.hashPrevBlock = deser_uint256(f)
         self.hashMerkleRoot = deser_uint256(f)
         self.nTime = int.from_bytes(f.read(4), "little")
@@ -730,7 +730,7 @@ class CBlockHeader:
 
     def serialize(self):
         r = b""
-        r += self.nVersion.to_bytes(4, "little", signed=True)
+        r += self.nVersion.to_bytes(4, "little")
         r += ser_uint256(self.hashPrevBlock)
         r += ser_uint256(self.hashMerkleRoot)
         r += self.nTime.to_bytes(4, "little")
@@ -741,7 +741,7 @@ class CBlockHeader:
     def calc_sha256(self):
         if self.sha256 is None:
             r = b""
-            r += self.nVersion.to_bytes(4, "little", signed=True)
+            r += self.nVersion.to_bytes(4, "little")
             r += ser_uint256(self.hashPrevBlock)
             r += ser_uint256(self.hashMerkleRoot)
             r += self.nTime.to_bytes(4, "little")
@@ -1133,7 +1133,7 @@ class msg_version:
         self.relay = 0
 
     def deserialize(self, f):
-        self.nVersion = int.from_bytes(f.read(4), "little", signed=True)
+        self.nVersion = int.from_bytes(f.read(4), "little")
         self.nServices = int.from_bytes(f.read(8), "little")
         self.nTime = int.from_bytes(f.read(8), "little", signed=True)
         self.addrTo = CAddress()
@@ -1152,7 +1152,7 @@ class msg_version:
 
     def serialize(self):
         r = b""
-        r += self.nVersion.to_bytes(4, "little", signed=True)
+        r += self.nVersion.to_bytes(4, "little")
         r += self.nServices.to_bytes(8, "little")
         r += self.nTime.to_bytes(8, "little", signed=True)
         r += self.addrTo.serialize(with_time=False)

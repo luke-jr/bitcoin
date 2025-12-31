@@ -292,7 +292,7 @@ class MiningTest(BitcoinTestFramework):
         assert_equal(tmpl['mintime'], tmpl['curtime'])
 
         block = CBlock()
-        block.nVersion = tmpl["version"]
+        block.nVersion = 0x80000000 | tmpl["version"]
         block.hashPrevBlock = int(tmpl["previousblockhash"], 16)
         block.nTime = tmpl["curtime"]
         block.nBits = int(tmpl["bits"], 16)

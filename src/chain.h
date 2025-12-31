@@ -187,7 +187,7 @@ public:
     uint32_t nStatus GUARDED_BY(::cs_main){0};
 
     //! block header
-    int32_t nVersion{0};
+    uint32_t nVersion{0};
     uint256 hashMerkleRoot{};
     uint32_t nTime{0};
     uint32_t nBits{0};

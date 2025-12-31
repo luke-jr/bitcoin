@@ -20,7 +20,7 @@
 // A compressed CBlockHeader, which leaves out the prevhash
 struct CompressedHeader {
     // header
-    int32_t nVersion{0};
+    uint32_t nVersion{0};
     uint256 hashMerkleRoot;
     uint32_t nTime{0};
     uint32_t nBits{0};

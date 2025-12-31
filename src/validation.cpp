@@ -3311,7 +3311,8 @@ void Chainstate::UpdateTip(const CBlockIndex* pindexNew)
         for (size_t i = 0; i < VERSIONBITS_NUM_BITS; ++i) unexpected_bit_count[i] = 0;
         // NOTE: The warning_threshold_hit* variables are static to ensure the warnings persist even after the condition changes, until the node is restarted
         static std::set<uint8_t> warning_threshold_hit_bits;
-        static int32_t warning_threshold_hit_int{-1};
+        static uint32_t warning_threshold_hit_int;
+        static int32_t warning_threshold_hit_int_meaning{-1};
         for (int i = 0; i < 100 && pindex != nullptr; i++)
         {
             int32_t nExpectedVersion = m_chainman.m_versionbitscache.ComputeBlockVersion(pindex->pprev, m_chainman.GetConsensus());
@@ -3321,10 +3322,11 @@ void Chainstate::UpdateTip(const CBlockIndex* pindexNew)
                 // Non-versionbits upgrade
                 static constexpr int WARNING_THRESHOLD = 100/2;
                 if (++nonversionbit_count > WARNING_THRESHOLD) {
-                    if (warning_threshold_hit_int == -1) {
+                    if (warning_threshold_hit_int_meaning == -1) {
                         warning_threshold_hit_int = pindex->nVersion;
+                        warning_threshold_hit_int_meaning = 0;
                     } else if (warning_threshold_hit_int != pindex->nVersion) {
-                        warning_threshold_hit_int = -2;
+                        warning_threshold_hit_int_meaning = -2;
                     }
                 }
             } else if ((pindex->nVersion & ~nExpectedVersion) != 0) {
@@ -3345,9 +3347,9 @@ void Chainstate::UpdateTip(const CBlockIndex* pindexNew)
             m_chainman.GetNotifications().warningSet(kernel::Warning::UNKNOWN_NEW_RULES_SIGNAL_VBITS, warning, /*update=*/true);
             warning_messages.push_back(warning);
         }
-        if (warning_threshold_hit_int != -1) {
+        if (warning_threshold_hit_int_meaning != -1) {
             bilingual_str warning;
-            if (warning_threshold_hit_int == -2) {
+            if (warning_threshold_hit_int_meaning == -2) {
                 warning = _("Warning: Unrecognised block versions are being mined! Unknown rules may or may not be in effect");
             } else {
                 warning = strprintf(_("Warning: Unrecognised block version (0x%08x) is being mined! Unknown rules may or may not be in effect"), warning_threshold_hit_int);
