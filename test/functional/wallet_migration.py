@@ -1657,10 +1657,7 @@ class WalletMigrationTest(BitcoinTestFramework):
         # Verify the /wallets/ path exists, the wallet is still BDB and the backup file is there.
         assert self.master_node.wallets_path.exists()
 
-        with open(self.master_node.wallets_path / "wallet.dat", "rb") as f:
-            data = f.read(16)
-            _, _, magic = struct.unpack("QII", data)
-            assert_equal(magic, BTREE_MAGIC)
+        self.assert_is_bdb("")
 
         backup_path = self.master_node.wallets_path / f"default_wallet_{mocked_time}.legacy.bak"
         assert backup_path.exists()
