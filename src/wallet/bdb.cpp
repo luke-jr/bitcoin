@@ -340,12 +340,17 @@ bool BerkeleyDatabase::Verify(bilingual_str& errorStr)
     return true;
 }
 
-void BerkeleyEnvironment::CheckpointLSN(const std::string& strFile)
+bool BerkeleyEnvironment::CheckpointLSN(const std::string& strFile)
 {
-    dbenv->txn_checkpoint(0, 0, 0);
-    if (fMockDb)
-        return;
-    dbenv->lsn_reset(strFile.c_str(), 0);
+    if (dbenv->txn_checkpoint(0, 0, 0) != 0) {
+        return false;
+    }
+    if (!fMockDb) {
+        if (dbenv->lsn_reset(strFile.c_str(), 0) != 0) {
+            return false;
+        }
+    }
+    return true;
 }
 
 BerkeleyDatabase::~BerkeleyDatabase()
@@ -521,7 +526,10 @@ bool BerkeleyDatabase::Rewrite(const char* pszSkip)
             if (m_refcount <= 0) {
                 // Flush log data to the dat file
                 env->CloseDb(m_filename);
-                env->CheckpointLSN(strFile);
+                if (!env->CheckpointLSN(strFile)) {
+                    LogPrintLevel(BCLog::WALLETDB, BCLog::Level::Error, "%s: Failed to checkpoint database file %s\n", __func__, strFile);
+                    return false;
+                }
                 m_refcount = -1;
 
                 bool fSuccess = true;
@@ -621,10 +629,19 @@ void BerkeleyEnvironment::Flush(bool fShutdown)
                 // Move log data to the dat file
                 CloseDb(filename);
                 LogDebug(BCLog::WALLETDB, "BerkeleyEnvironment::Flush: %s checkpoint\n", strFile);
-                dbenv->txn_checkpoint(0, 0, 0);
+                if (dbenv->txn_checkpoint(0, 0, 0) != 0) {
+                    LogPrintLevel(BCLog::WALLETDB, BCLog::Level::Error, "%s: %s checkpoint FAILED\n", __func__, strFile);
+                    no_dbs_accessed = false;
+                    continue;
+                }
                 LogDebug(BCLog::WALLETDB, "BerkeleyEnvironment::Flush: %s detach\n", strFile);
-                if (!fMockDb)
-                    dbenv->lsn_reset(strFile.c_str(), 0);
+                if (!fMockDb) {
+                    if (dbenv->lsn_reset(strFile.c_str(), 0) != 0) {
+                        LogPrintLevel(BCLog::WALLETDB, BCLog::Level::Error, "%s: %s detach FAILED\n", __func__, strFile);
+                        no_dbs_accessed = false;
+                        continue;
+                    }
+                }
                 LogDebug(BCLog::WALLETDB, "BerkeleyEnvironment::Flush: %s closed\n", strFile);
                 nRefCount = -1;
             } else {
@@ -665,7 +682,10 @@ bool BerkeleyDatabase::PeriodicFlush()
 
     // Flush wallet file so it's self contained
     env->CloseDb(m_filename);
-    env->CheckpointLSN(strFile);
+    if (!env->CheckpointLSN(strFile)) {
+        LogPrintLevel(BCLog::WALLETDB, BCLog::Level::Error, "%s: FAILED to flush wallet %s\n", __func__, strFile);
+        return false;
+    }
     m_refcount = -1;
 
     LogDebug(BCLog::WALLETDB, "Flushed %s %dms\n", strFile, Ticks<std::chrono::milliseconds>(SteadyClock::now() - start));
@@ -684,7 +704,10 @@ bool BerkeleyDatabase::Backup(const std::string& strDest) const
             {
                 // Flush log data to the dat file
                 env->CloseDb(m_filename);
-                env->CheckpointLSN(strFile);
+                if (!env->CheckpointLSN(strFile)) {
+                    LogPrintLevel(BCLog::WALLETDB, BCLog::Level::Error, "%s: FAILED to flush wallet %s\n", __func__, strFile);
+                    return false;
+                }
 
                 // Copy wallet file
                 fs::path pathSrc = env->Directory() / m_filename;
