@@ -198,7 +198,7 @@ bool BerkeleyEnvironment::Open(bilingual_str& err)
         Reset();
         err = strprintf(_("Error initializing wallet database environment %s!"), fs::quoted(fs::PathToString(Directory())));
         if (ret == DB_RUNRECOVERY) {
-            err += Untranslated(" ") + _("This error could occur if this wallet was not shutdown cleanly and was last loaded using a build with a newer version of Berkeley DB. If so, please use the software that last loaded this wallet");
+            err += Untranslated(" ") + _("This error could occur if this wallet was last loaded using a build with a newer version of Berkeley DB.");
         }
         return false;
     }
@@ -656,13 +656,6 @@ void BerkeleyEnvironment::Flush(bool fShutdown)
             if (no_dbs_accessed) {
                 dbenv->log_archive(&listp, DB_ARCH_REMOVE);
                 Close(/*do_unlock=*/false);
-                if (!fMockDb) {
-                    try {
-                        fs::remove_all(fs::PathFromString(strPath) / "database");
-                    } catch (const fs::filesystem_error& e) {
-                        LogPrintLevel(BCLog::WALLETDB, BCLog::Level::Error, "%s: FAILED to delete \"database\" directory: %s\n", __func__, fsbridge::get_filesystem_error_message(e));
-                    }
-                }
                 UnlockDirectory(fs::PathFromString(strPath), ".walletlock");
             }
         }
