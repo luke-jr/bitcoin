@@ -67,7 +67,7 @@ public:
     fs::path Directory() const { return fs::PathFromString(strPath); }
 
     bool Open(bilingual_str& error);
-    void Close();
+    void Close(bool do_unlock = true);
     void Flush(bool fShutdown);
     [[nodiscard]] bool CheckpointLSN(const std::string& strFile);
 

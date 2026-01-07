@@ -95,7 +95,7 @@ std::shared_ptr<BerkeleyEnvironment> GetBerkeleyEnv(const fs::path& env_director
 // BerkeleyBatch
 //
 
-void BerkeleyEnvironment::Close()
+void BerkeleyEnvironment::Close(const bool do_unlock)
 {
     if (!fDbEnvInit)
         return;
@@ -122,7 +122,9 @@ void BerkeleyEnvironment::Close()
 
     if (error_file) fclose(error_file);
 
-    UnlockDirectory(fs::PathFromString(strPath), ".walletlock");
+    if (do_unlock) {
+        UnlockDirectory(fs::PathFromString(strPath), ".walletlock");
+    }
 }
 
 void BerkeleyEnvironment::Reset()
@@ -704,10 +706,11 @@ void BerkeleyEnvironment::Flush(bool fShutdown)
             char** listp;
             if (no_dbs_accessed) {
                 dbenv->log_archive(&listp, DB_ARCH_REMOVE);
-                Close();
+                Close(/*do_unlock=*/false);
                 if (!fMockDb) {
                     fs::remove_all(fs::PathFromString(strPath) / "database");
                 }
+                UnlockDirectory(fs::PathFromString(strPath), ".walletlock");
             }
         }
     }
