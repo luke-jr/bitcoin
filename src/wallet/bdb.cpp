@@ -708,7 +708,11 @@ void BerkeleyEnvironment::Flush(bool fShutdown)
                 dbenv->log_archive(&listp, DB_ARCH_REMOVE);
                 Close(/*do_unlock=*/false);
                 if (!fMockDb) {
-                    fs::remove_all(fs::PathFromString(strPath) / "database");
+                    try {
+                        fs::remove_all(fs::PathFromString(strPath) / "database");
+                    } catch (const fs::filesystem_error& e) {
+                        LogPrintLevel(BCLog::WALLETDB, BCLog::Level::Error, "%s: FAILED to delete \"database\" directory: %s\n", __func__, fsbridge::get_filesystem_error_message(e));
+                    }
                 }
                 UnlockDirectory(fs::PathFromString(strPath), ".walletlock");
             }
