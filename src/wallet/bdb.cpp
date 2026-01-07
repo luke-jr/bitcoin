@@ -177,7 +177,7 @@ bool BerkeleyEnvironment::Open(bilingual_str& err)
         Reset();
         err = strprintf(_("Error initializing wallet database environment %s!"), fs::quoted(fs::PathToString(Directory())));
         if (ret == DB_RUNRECOVERY) {
-            err += Untranslated(" ") + _("This error could occur if this wallet was not shutdown cleanly and was last loaded using a build with a newer version of Berkeley DB. If so, please use the software that last loaded this wallet");
+            err += Untranslated(" ") + _("This error could occur if this wallet was last loaded using a build with a newer version of Berkeley DB.");
         }
         return false;
     }
@@ -567,9 +567,6 @@ void BerkeleyEnvironment::Flush(bool fShutdown)
             if (no_dbs_accessed) {
                 dbenv->log_archive(&listp, DB_ARCH_REMOVE);
                 Close();
-                if (!fMockDb) {
-                    fs::remove_all(fs::PathFromString(strPath) / "database");
-                }
             }
         }
     }
