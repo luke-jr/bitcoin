@@ -743,11 +743,7 @@ class WalletMigrationTest(BitcoinTestFramework):
         backup_path = master_path / f"{backup_prefix}_{mocked_time}.legacy.bak"
         assert backup_path.exists()
 
-        with open(self.master_node.wallets_path / wallet_name / self.wallet_data_filename, "rb") as f:
-            data = f.read(16)
-            _, _, magic = struct.unpack("QII", data)
-            assert_equal(magic, BTREE_MAGIC)
-
+        self.assert_is_bdb(wallet_name)
 
         # Cleanup
         if is_default:
