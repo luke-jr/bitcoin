@@ -621,7 +621,8 @@ void BerkeleyEnvironment::Flush(bool fShutdown)
         bool no_dbs_accessed = true;
         for (auto& db_it : m_databases) {
             const fs::path& filename = db_it.first;
-            int nRefCount = db_it.second.get().m_refcount;
+            BerkeleyDatabase& database = db_it.second.get();
+            const int nRefCount = database.m_refcount;
             if (nRefCount < 0) continue;
             const std::string strFile = fs::PathToString(filename);
             LogDebug(BCLog::WALLETDB, "BerkeleyEnvironment::Flush: Flushing %s (refcount = %d)...\n", strFile, nRefCount);
@@ -643,7 +644,7 @@ void BerkeleyEnvironment::Flush(bool fShutdown)
                     }
                 }
                 LogDebug(BCLog::WALLETDB, "BerkeleyEnvironment::Flush: %s closed\n", strFile);
-                nRefCount = -1;
+                database.m_refcount = -1;
             } else {
                 no_dbs_accessed = false;
             }
