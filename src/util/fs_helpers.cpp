@@ -410,7 +410,7 @@ bool IsDirWritable(const fs::path& dir_path)
     if (!fs::is_directory(dir_path)) throw std::runtime_error(strprintf("Path %s is not a directory", fs::PathToString(dir_path)));
     FastRandomContext rng;
     const auto tmp = dir_path / fs::PathFromString(strprintf(".tmp_%d", rng.rand64()));
-    if (auto created{fsbridge::fopen(tmp, "a")}) {
+    if (auto created{fsbridge::fopen(tmp, "wx")}) {
         std::fclose(created);
         std::error_code ec;
         fs::remove(tmp, ec); // clean up, ignore errors
