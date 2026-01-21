@@ -949,7 +949,7 @@ std::unique_ptr<BerkeleyDatabase> MakeBerkeleyDatabase(const fs::path& path, con
 {
     fs::path data_file = BDBDataFile(path);
     std::unique_ptr<BerkeleyDatabase> db;
-    {
+    try {
         LOCK(cs_db); // Lock env.m_databases until insert in BerkeleyDatabase constructor
         fs::path data_filename = data_file.filename();
         std::shared_ptr<BerkeleyEnvironment> env = GetBerkeleyEnv(data_file.parent_path(), options.use_shared_memory);
@@ -959,10 +959,20 @@ std::unique_ptr<BerkeleyDatabase> MakeBerkeleyDatabase(const fs::path& path, con
             return nullptr;
         }
         db = std::make_unique<BerkeleyDatabase>(std::move(env), std::move(data_filename), options);
+    } catch (const std::runtime_error& e) {
+        status = DatabaseStatus::FAILED_LOAD;
+        error = Untranslated(e.what());
+        return nullptr;
     }
 
-    if (options.verify && !db->Verify(error)) {
+    try {
+        if (options.verify && !db->Verify(error)) {
+            status = DatabaseStatus::FAILED_VERIFY;
+            return nullptr;
+        }
+    } catch (const std::runtime_error& e) {
         status = DatabaseStatus::FAILED_VERIFY;
+        error = Untranslated(e.what());
         return nullptr;
     }
 
