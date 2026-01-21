@@ -151,6 +151,9 @@ bool BerkeleyEnvironment::Open(bilingual_str& err)
 
     fs::path pathIn = fs::PathFromString(strPath);
     TryCreateDirectories(pathIn);
+    if (!IsDirWritable(pathIn)) {
+        throw std::runtime_error(strprintf("BerkeleyEnvironment: Failed to open database in directory '%s': directory is not writable", fs::PathToString(pathIn)));
+    }
     if (util::LockDirectory(pathIn, ".walletlock") != util::LockResult::Success) {
         LogPrintf("Cannot obtain a lock on wallet directory %s. Another instance may be using it.\n", strPath);
         err = strprintf(_("Error initializing wallet database environment %s!"), fs::quoted(fs::PathToString(Directory())));
