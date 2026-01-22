@@ -4758,7 +4758,7 @@ util::Result<MigrationResult> MigrateLegacyToDescriptor(std::shared_ptr<CWallet>
             // This wallet has no records. We can safely remove it.
             std::vector<fs::path> paths_to_remove = local_wallet->GetDatabase().Files();
             local_wallet.reset();
-            for (const auto& path_to_remove : paths_to_remove) fs::remove_all(path_to_remove);
+            for (const auto& path_to_remove : paths_to_remove) fs::remove(path_to_remove);
         }
 
         LogInfo("Loading new wallets after migration...\n");
@@ -4768,12 +4768,16 @@ util::Result<MigrationResult> MigrateLegacyToDescriptor(std::shared_ptr<CWallet>
         for (std::shared_ptr<CWallet>* wallet_ptr : {&local_wallet, &res.watchonly_wallet, &res.solvables_wallet}) {
             if (success && *wallet_ptr) {
                 std::shared_ptr<CWallet>& wallet = *wallet_ptr;
-                // Save db path and reload wallet
+                // Track db path and load wallet
                 track_for_cleanup(*wallet);
-                success = reload_wallet(wallet);
+                if (!reload_wallet(wallet)) {
+                    success = false;
+                    break;
+                }
 
-                // When no wallet is set, set the main wallet.
-                if (success && !res.wallet) {
+                // Set the first successfully loaded wallet as the main one.
+                // The loop order is intentional and must always start with the local wallet.
+                if (!res.wallet) {
                     res.wallet_name = wallet->GetName();
                     res.wallet = std::move(wallet);
                 }

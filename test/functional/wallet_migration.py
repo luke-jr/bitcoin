@@ -692,8 +692,7 @@ class WalletMigrationTest(BitcoinTestFramework):
         wallet = self.create_legacy_wallet("", blank=True)
         wallet.importaddress(master_wallet.getnewaddress(address_type="legacy"))
 
-        res, def_wallet = self.migrate_and_get_rpc("")
-        wallet = self.master_node.get_wallet_rpc("default_wallet_watchonly")
+        res, wallet = self.migrate_and_get_rpc("")
 
         info = wallet.getwalletinfo()
         assert_equal(info["descriptors"], True)
@@ -701,14 +700,8 @@ class WalletMigrationTest(BitcoinTestFramework):
         assert_equal(info["private_keys_enabled"], False)
         assert_equal(info["walletname"], "default_wallet_watchonly")
 
-        # The default wallet will still exist and have newly generated descriptors
-        assert (self.master_node.wallets_path / "wallet.dat").exists()
-        def_wallet_info = def_wallet.getwalletinfo()
-        assert_equal(def_wallet_info["descriptors"], True)
-        assert_equal(def_wallet_info["format"], "sqlite")
-        assert_equal(def_wallet_info["private_keys_enabled"], True)
-        assert_equal(def_wallet_info["walletname"], "")
-        assert_greater_than(def_wallet_info["keypoolsize"], 0)
+        # Check the default wallet is not available anymore
+        assert not (self.master_node.wallets_path / "wallet.dat").exists()
 
         wallet.unloadwallet()
         self.clear_default_wallet(backup_file=Path(res["backup_path"]))
