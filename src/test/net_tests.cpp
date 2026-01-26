@@ -835,7 +835,6 @@ BOOST_AUTO_TEST_CASE(LocalAddress_nScore_Overflow)
     }
 
     RemoveLocal(addr);
-    g_reachable_nets.Remove(NET_IPV4);
     BOOST_CHECK(!IsLocal(addr));
 }
 
