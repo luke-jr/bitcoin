@@ -55,8 +55,9 @@ class QComboBox;
 class QDateTime;
 class QProgressBar;
 class QProgressDialog;
-class QWinTaskbarButton;
 QT_END_NAMESPACE
+
+class WinTaskbarProgress;
 
 namespace GUIUtil {
 class ClickableLabel;
@@ -180,7 +181,7 @@ private:
     RPCConsole* rpcConsole = nullptr;
     HelpMessageDialog* helpMessageDialog = nullptr;
 #ifdef BITCOIN_QT_WIN_TASKBAR
-    QWinTaskbarButton* m_taskbar_button = nullptr;
+    WinTaskbarProgress* m_taskbar_progress = nullptr;
 #endif
     ModalOverlay* modalOverlay = nullptr;
     MempoolStats* mempoolStats = nullptr;
