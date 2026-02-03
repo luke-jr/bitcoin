@@ -575,6 +575,19 @@ void BitcoinGUI::createMenuBar()
         minimize_action->setEnabled(window != nullptr && (window->flags() & Qt::Dialog) != Qt::Dialog && window->windowState() != Qt::WindowMinimized);
     });
 
+    QAction* test_action = window_menu->addAction(tr("TEST"));
+    test_action->setShortcut(QKeySequence("Ctrl+A"));
+    connect(test_action, &QAction::triggered, [this]{
+        double v = QInputDialog::getDouble(this, "verification_progress", "verification_progress", 0.5, 0., 1., 10);
+        interfaces::BlockTip test_tip = {
+            .block_height = (int)(1000*v),
+            .block_time = 1767556937,
+            .block_hash = uint256(),
+        };
+        clientModel->TipChanged(SynchronizationState::INIT_DOWNLOAD, test_tip, v, SyncType::BLOCK_SYNC);
+    });
+
+
 #ifdef Q_OS_MACOS
     QAction* zoom_action = window_menu->addAction(tr("Zoom"));
     connect(zoom_action, &QAction::triggered, [] {
