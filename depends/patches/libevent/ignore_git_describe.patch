@@ -1,0 +1,11 @@
+--- a/cmake/VersionViaGit.cmake
++++ b/cmake/VersionViaGit.cmake
+@@ -28,7 +28,7 @@ macro(event_fuzzy_version_from_git)
+ 
+ 	find_package(Git)
+ 
+-	if (GIT_FOUND)
++	if (0)
+ 		execute_process(
+ 			COMMAND
+ 				${GIT_EXECUTABLE} describe --abbrev=0 --always
