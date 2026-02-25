@@ -1,25 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
-<svg width="256" height="256" viewBox="0 0 1000 1000" fill="none" xmlns="http://www.w3.org/2000/svg">
-<!-- Bitcoin Knots logo with BIP-110 badge -->
-<!-- Original designers: Kurtis Stirling, Blissmode, Skyler, and Steven Hay - License: MIT -->
-
-<defs>
-  <clipPath id="circleClip">
-    <circle cx="500" cy="500" r="480"/>
-  </clipPath>
-</defs>
-
-<!-- Background orange circle -->
-<circle cx="500" cy="500" r="480" fill="#F7931A"/>
-
-<!-- Blue bottom section (clipped to circle) -->
-<rect x="20" y="720" width="960" height="460" fill="#4169E1" clip-path="url(#circleClip)"/>
-
-<!-- White dividing line -->
-<line x1="20" y1="720" x2="980" y2="720" stroke="#FFFFFF" stroke-width="8" clip-path="url(#circleClip)"/>
-
-<!-- Bitcoin Knots logo - scaled down and shifted up -->
-<g id="logo" transform="translate(500, 420) scale(0.75) translate(-530, -508)">
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<svg width="1in" height="1in" viewBox="144 122 773 773" fill="none" xmlns="http://www.w3.org/2000/svg">
+<!-- Designers: Kurtis Stirling, Blissmode, Skyler, and Steven Hay
+     License: MIT
+-->
+<g id="logo">
 <path d="M540.681 696.414C529.339 653.751 478.297 622.884 453.145 587.814C416.799 537.137 417.823 468.303 461.839 414.562C474.635 428.893 477.708 431.72 495.107 447.83C464.819 485.851 462.481 522.417 483.666 555.915C514.484 604.645 576.678 630.626 586.815 695.55C586.815 695.55 563.783 696.062 540.681 696.414Z" fill="#171717"/>
 <path d="M639.533 534.328C672.801 560.942 707.293 587.769 706.034 630.028C704.183 692.176 655.731 716.019 589.886 717.047C581.943 717.171 492.641 717.559 492.641 717.559C488.63 741.195 489.824 761.777 496.725 779.731C496.725 779.731 607.471 780.041 607.192 780.041C708.889 780.041 790.939 731.742 790.939 630.028C790.939 569.471 751.621 532.792 696.856 499.012C675.36 511.808 657.446 521.532 639.533 534.328Z" fill="#171717"/>
 <path d="M542.287 589.092C531.976 579.426 518.232 567.084 509.019 556.336C589.978 450.901 687.227 449.366 689.209 369.541C690.26 327.228 653.826 303.713 613.233 296.005C616.829 273.396 615.802 256.953 612.205 238.455C685.684 239.997 761.525 290.867 761.525 369.541C761.525 481.61 638.981 473.105 542.287 589.092Z" fill="#171717"/>
@@ -28,7 +13,4 @@
 <path d="M538.662 801.18C531.334 816.154 521.386 831.937 509.421 843.548C486.765 820.963 471.581 787.94 469.386 755.973C467.301 725.637 472.607 690.04 491.105 659.723C479.333 647.439 468.585 637.715 457.325 627.478C435.23 662.933 427.715 700.222 425.592 736.822C421.86 801.18 455.734 858.859 509.775 892C545.777 870.016 573.708 841.218 587.267 801.286C571.124 801.286 554.981 801.286 538.733 801.251L538.662 801.18Z" fill="#171717"/>
 <path d="M606.039 440.395C573.436 417.311 500.015 378.767 477.809 314.504H430.436C447.05 385.719 505.794 430.763 559.28 475.073C574.181 461.976 586.513 454.268 606.039 440.395Z" fill="#171717"/>
 </g>
-
-<!-- 110 text centered in blue section -->
-<text x="500" y="870" font-family="Arial, sans-serif" font-size="140" font-weight="bold" fill="#FFFFFF" text-anchor="middle">110</text>
 </svg>

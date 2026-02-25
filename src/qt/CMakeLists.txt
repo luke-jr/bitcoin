@@ -150,9 +150,9 @@ add_custom_command(
 )
 add_custom_target(generate_ico DEPENDS "${bitcoin_ico}" "${testnet_ico}")
 
-set(logo_svg "res/src/bitcoinknots-logo.svg")
-set(png "${ICON_PATH}/bitcoinknots-logo.png")
+set(logo_svg "res/src/bitcoin.svg")
 set(size 960)
+set(png "${ICON_PATH}/bitcoin${size}.png")
 add_custom_command(
   OUTPUT ${png}
   COMMAND "${RSVG_CONVERT}" -f png -d ${size} -p ${size} --output "${png}" "${CMAKE_CURRENT_SOURCE_DIR}/${logo_svg}"
