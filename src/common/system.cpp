@@ -11,27 +11,30 @@
 #include <util/string.h>
 #include <util/time.h>
 
-#ifndef WIN32
-#include <sys/stat.h>
-#else
-#include <compat/compat.h>
+#ifdef WIN32
 #include <codecvt>
+#include <compat/compat.h>
+#include <windows.h>
+#else
+#include <sys/stat.h>
+#include <unistd.h>
 #endif
 
 #ifdef HAVE_MALLOPT_ARENA_MAX
 #include <malloc.h>
 #endif
 
+#include <algorithm>
+#include <cstddef>
+#include <cstdint>
 #include <cstdlib>
 #include <locale>
+#include <optional>
 #include <stdexcept>
 #include <string>
 #include <thread>
 
 using util::ReplaceAll;
-
-// Application startup time (used for uptime calculation)
-const int64_t nStartupTime = GetTime();
 
 #ifndef WIN32
 std::string ShellEscape(const std::string& arg)
@@ -105,8 +108,24 @@ int GetNumCores()
     return std::thread::hardware_concurrency();
 }
 
-// Obtain the application startup time (used for uptime calculation)
-int64_t GetStartupTime()
+std::optional<size_t> GetTotalRAM()
 {
-    return nStartupTime;
+    [[maybe_unused]] auto clamp{[](uint64_t v) { return size_t(std::min(v, uint64_t{std::numeric_limits<size_t>::max()})); }};
+#ifdef WIN32
+    if (MEMORYSTATUSEX m{}; (m.dwLength = sizeof(m), GlobalMemoryStatusEx(&m))) return clamp(m.ullTotalPhys);
+#elif defined(__APPLE__) || \
+      defined(__FreeBSD__) || \
+      defined(__NetBSD__) || \
+      defined(__OpenBSD__) || \
+      defined(__illumos__) || \
+      defined(__linux__)
+    if (long p{sysconf(_SC_PHYS_PAGES)}, s{sysconf(_SC_PAGESIZE)}; p > 0 && s > 0) return clamp(1ULL * p * s);
+#endif
+    return std::nullopt;
 }
+
+namespace {
+    const auto g_startup_time{SteadyClock::now()};
+} // namespace
+
+SteadyClock::duration GetUptime() { return SteadyClock::now() - g_startup_time; }
