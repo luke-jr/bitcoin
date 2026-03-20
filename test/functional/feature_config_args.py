@@ -464,6 +464,7 @@ class ConfArgsTest(BitcoinTestFramework):
         conf_file = self.nodes[0].datadir_path / "bitcoin.conf"
         for chain, chain_name in {("main", ""), ("test", "testnet3"), ("signet", "signet"), ("testnet4", "testnet4")}:
             util.write_config(conf_file, n=0, chain=chain_name, extra_config='acceptstalefeeestimates=1\n')
+            self.nodes[0].expected_stderr_prefix = self.MAINNET_NORMAL_STDERR if (chain_name == '') else ''
             self.nodes[0].assert_start_raises_init_error(expected_msg=f'Error: acceptstalefeeestimates is not supported on {chain} chain.')
         util.write_config(conf_file, n=0, chain="regtest")  # Reset to regtest
 

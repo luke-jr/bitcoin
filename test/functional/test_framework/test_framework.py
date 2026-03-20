@@ -243,6 +243,19 @@ class BitcoinTestFramework(metaclass=BitcoinTestMetaClass):
 
         PortSeed.n = self.options.port_seed
 
+        self.MAINNET_NORMAL_STDERR = f'''Caution: Bitcoin protocol change proposed
+
+A one-year "reduced data" protocol change to the Bitcoin rules, beginning no later than September, has been proposed. This upgrade fixes an existential threat to the Bitcoin network.
+
+Protocol changes require user consent to be effective, and if enforced inconsistently within the community may compromise your security or others'!
+
+If you do not know what you are doing, you can learn more at https://bitcoinknots.org/learn/2026-rdts.
+
+Note that to reject this softfork, you must implement your own rejection fork.
+(You must make a decision either way - old versions are insecure in all scenarios.)
+
+This release of {self.config['environment']['CLIENT_NAME']} does NOT include the protocol change, and will be insecure when it activates. You can download the latest version from {self.config['environment']['CLIENT_URL']}.'''
+
     def set_binary_paths(self):
         """Update self.options with the paths of all binaries from environment variables or their default values"""
 
