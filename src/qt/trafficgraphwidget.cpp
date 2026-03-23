@@ -27,16 +27,12 @@
 #define YMARGIN                 10
 
 TrafficGraphWidget::TrafficGraphWidget(QWidget* parent)
-    : QWidget(parent),
-      vSamplesIn(),
-      vSamplesOut()
+    : QWidget(parent)
 {
-    timer = new QTimer(this);
-    tt_timer = new QTimer(this);
-    connect(timer, &QTimer::timeout, this, &TrafficGraphWidget::updateRates);
-    connect(tt_timer, &QTimer::timeout, this, &TrafficGraphWidget::updateToolTip);
-    tt_timer->setInterval(500);
-    tt_timer->start();
+    m_timer = new QTimer(this);
+    connect(m_timer, &QTimer::timeout, this, &TrafficGraphWidget::updateStuff);
+    m_timer->setInterval(75);
+    m_timer->start();
     setMouseTracking(true);
 }
 
@@ -44,18 +40,22 @@ void TrafficGraphWidget::setClientModel(ClientModel *model)
 {
     clientModel = model;
     if(model) {
-        nLastBytesIn = model->node().getTotalBytesRecv();
-        nLastBytesOut = model->node().getTotalBytesSent();
+        const quint64 bytes_in = model->node().getTotalBytesRecv();
+        const quint64 bytes_out = model->node().getTotalBytesSent();
+        const int64_t now = GetTime<std::chrono::milliseconds>().count();
+        for (int i = 0; i < VALUES_SIZE; ++i) {
+            m_last_bytes_in[i] = bytes_in;
+            m_last_bytes_out[i] = bytes_out;
+            m_last_time[i] = now - m_timer->interval();
+        }
     }
 }
-
-std::chrono::minutes TrafficGraphWidget::getGraphRange() const { return m_range; }
 
 int TrafficGraphWidget::y_value(float value)
 {
     if (fMax == 0) return 0;
     int h = height() - YMARGIN * 2;
-    return YMARGIN + h - (h * 1.0 * (fToggle ? (pow(value, 0.30102) / pow(fMax, 0.30102)) : (value / fMax)));
+    return YMARGIN + h - (h * 1.0 * (fToggle ? (std::pow(value, 0.30102) / std::pow(fMax, 0.30102)) : (value / fMax)));
 }
 
 void TrafficGraphWidget::paintPath(QPainterPath &path, QQueue<float> &samples)
@@ -66,7 +66,8 @@ void TrafficGraphWidget::paintPath(QPainterPath &path, QQueue<float> &samples)
         int x = XMARGIN + w;
         path.moveTo(x, YMARGIN + h);
         for(int i = 0; i < sampleCount; ++i) {
-            x = XMARGIN + w - w * i / DESIRED_SAMPLES;
+            double ratio = static_cast<double>(i) * m_values[m_value] / m_range / DESIRED_SAMPLES;
+            x = XMARGIN + w - static_cast<int>(w * ratio);
             int y = y_value(samples.at(i));
             path.lineTo(x, y);
         }
@@ -101,6 +102,9 @@ void TrafficGraphWidget::mouseMoveEvent(QMouseEvent *event)
     int h = height() - YMARGIN * 2, w = width() - XMARGIN * 2;
     int i = (w + XMARGIN - x) * DESIRED_SAMPLES / w;
     unsigned int smallest_distance = 50; int closest_i = -1;
+    auto vTimeStamp = m_time_stamp[m_value];
+    auto& vSamplesIn = m_samples_in[m_value];
+    auto& vSamplesOut = m_samples_out[m_value];
     int sampleSize = vTimeStamp.size();
     if (sampleSize && i >= -10 && i < sampleSize + 2 && y <= h + YMARGIN + 3) {
         for (int test_i = std::max(i - 2, 0); test_i < std::min(i + 10, sampleSize); test_i++) {
@@ -142,7 +146,7 @@ void TrafficGraphWidget::paintEvent(QPaintEvent *)
     // if we drew 10 or 3 fewer lines, break them up at the next lower order of magnitude
     if(fMax / val <= (fToggle ? 10.0f : 3.0f)) {
         float oldval = val;
-        val = pow(10.0f, base - 1);
+        val = std::pow(10.0f, base - 1);
         painter.setPen(axisCol.darker());
         painter.drawText(XMARGIN, y_value(val)-yMarginText, QString("%1 %2").arg(val).arg(units));
         if (fToggle) {
@@ -167,6 +171,9 @@ void TrafficGraphWidget::paintEvent(QPaintEvent *)
     }
     painter.drawText(XMARGIN, y_value(val)-yMarginText, QString("%1 %2").arg(val).arg(units));
 
+    auto vTimeStamp = m_time_stamp[m_value];
+    auto& vSamplesIn = m_samples_in[m_value];
+    auto& vSamplesOut = m_samples_out[m_value];
     painter.setRenderHint(QPainter::Antialiasing);
     if(!vSamplesIn.empty()) {
         QPainterPath p;
@@ -186,7 +193,8 @@ void TrafficGraphWidget::paintEvent(QPaintEvent *)
     if (ttpoint >= 0 && ttpoint < sampleCount) {
         painter.setPen(Qt::yellow);
         int w = width() - XMARGIN * 2;
-        int x = XMARGIN + w - w * ttpoint / DESIRED_SAMPLES;
+        double ratio = static_cast<double>(ttpoint) * m_values[m_value] / m_range / DESIRED_SAMPLES;
+        int x = XMARGIN + w - static_cast<int>(w * ratio);
         int y = y_value(std::max(vSamplesIn.at(ttpoint), vSamplesOut.at(ttpoint)));
         painter.drawEllipse(QPointF(x, y), 3, 3);
         QString strTime;
@@ -212,80 +220,115 @@ void TrafficGraphWidget::paintEvent(QPaintEvent *)
         QToolTip::hideText();
 }
 
-void TrafficGraphWidget::updateToolTip()
+void TrafficGraphWidget::updateFmax()
 {
-    if (!QToolTip::isVisible()) {
-        if (ttpoint >= 0) { // Remove the yellow circle if the ToolTip has gone due to mouse moving elsewhere.
-            ttpoint = -1;
-            update();
+    float tmax = 0.0f;
+    for (const float f : m_samples_in[m_value]) {
+        if (f > tmax) tmax = f;
+    }
+    for (const float f : m_samples_out[m_value]) {
+        if (f > tmax) tmax = f;
+    }
+    fMax = tmax;
+}
+
+void TrafficGraphWidget::updateStuff()
+{
+    if(!clientModel) return;
+
+    int64_t expected_gap = m_timer->interval();
+    int64_t now = GetTime<std::chrono::milliseconds>().count();
+    static int64_t last_jump_time = 0;
+    int64_t time_offset = 0;
+
+    if (!m_time_stamp[0].empty()) {
+        int64_t last_time = m_time_stamp[0].front();
+        int64_t actual_gap = now - last_time;
+        if (actual_gap >= 1000 + expected_gap && last_time != last_jump_time) {
+            time_offset = actual_gap - expected_gap;
+            last_jump_time = last_time;
         }
-    } else if (GetTime() >= tt_time + 9) { // ToolTip is about to expire so refresh it.
+    }
+
+    bool update_needed = false;
+
+    for (int i = 0; i < VALUES_SIZE; i++) {
+        int64_t msecs_per_sample = static_cast<int64_t>(m_values[i]) * 60000 / DESIRED_SAMPLES;
+        if (time_offset) {
+            m_offset[i] += time_offset;
+            if (m_offset[i] > now - m_last_time[i]) m_offset[i] = now - m_last_time[i];
+        }
+        if (now > (m_last_time[i] + msecs_per_sample + m_offset[i] - expected_gap / 2)) {
+            m_offset[i] = 0;
+            updateRates(i);
+            if (i == m_value) {
+                if (ttpoint >=0 && ttpoint < DESIRED_SAMPLES) {
+                    ttpoint++;
+                    if (ttpoint >= DESIRED_SAMPLES) ttpoint = -1;
+                }
+                update_needed = true;
+            }
+        }
+    }
+
+    if (!QToolTip::isVisible() || !isVisible() || window()->isMinimized()) {
+        if (ttpoint >= 0) {
+            ttpoint = -1;
+            update_needed = true;
+        }
+    } else if (ttpoint >= 0 && GetTime() >= tt_time + 9) {
+        update_needed = true;
+    }
+
+    if (update_needed) {
+        updateFmax();
         update();
     }
 }
 
-void TrafficGraphWidget::updateRates()
+void TrafficGraphWidget::updateRates(int i)
 {
-    if(!clientModel) return;
+    int64_t now = GetTime<std::chrono::milliseconds>().count();
+    int64_t actual_gap = now - m_last_time[i];
+    quint64 bytesIn = clientModel->node().getTotalBytesRecv();
+    quint64 bytesOut = clientModel->node().getTotalBytesSent();
+    float in_rate_kilobytes_per_msec = static_cast<float>(bytesIn - m_last_bytes_in[i]) / actual_gap;
+    float out_rate_kilobytes_per_msec = static_cast<float>(bytesOut - m_last_bytes_out[i]) / actual_gap;
+    m_samples_in[i].push_front(in_rate_kilobytes_per_msec);
+    m_samples_out[i].push_front(out_rate_kilobytes_per_msec);
+    m_time_stamp[i].push_front(now);
+    m_last_time[i] = now;
+    m_last_bytes_in[i] = bytesIn;
+    m_last_bytes_out[i] = bytesOut;
 
-    int64_t nTime = TicksSinceEpoch<std::chrono::milliseconds>(SystemClock::now());
-    static int64_t nLastTime = nTime - timer->interval();
-    int nRealInterval = nTime - nLastTime;
-    quint64 bytesIn = clientModel->node().getTotalBytesRecv(),
-            bytesOut = clientModel->node().getTotalBytesSent();
-    float in_rate_kilobytes_per_sec = static_cast<float>(bytesIn - nLastBytesIn) / nRealInterval;
-    float out_rate_kilobytes_per_sec = static_cast<float>(bytesOut - nLastBytesOut) / nRealInterval;
-    vSamplesIn.push_front(in_rate_kilobytes_per_sec);
-    vSamplesOut.push_front(out_rate_kilobytes_per_sec);
-    vTimeStamp.push_front(nLastTime);
-    nLastTime = nTime;
-    nLastBytesIn = bytesIn;
-    nLastBytesOut = bytesOut;
+    static int8_t fFull[VALUES_SIZE] = {};
+    if (fFull[i] == 0 && m_time_stamp[i].size() <= DESIRED_SAMPLES) {
+        fFull[i] = -1;
+    }
+    while (m_time_stamp[i].size() > DESIRED_SAMPLES) {
+        if (ttpoint < 0 && m_value == i && i < VALUES_SIZE - 1 && fFull[i] < 0) {
+            m_bump_value = true;
+        }
+        fFull[i] = 1;
+        m_samples_in[i].pop_back();
+        m_samples_out[i].pop_back();
+        m_time_stamp[i].pop_back();
+    }
+}
 
-    while(vSamplesIn.size() > DESIRED_SAMPLES) {
-        vSamplesIn.pop_back();
-    }
-    while(vSamplesOut.size() > DESIRED_SAMPLES) {
-        vSamplesOut.pop_back();
-    }
-    while(vTimeStamp.size() > DESIRED_SAMPLES) {
-        vTimeStamp.pop_back();
+int TrafficGraphWidget::setGraphRange(int value)
+{
+    if (!value) {
+        m_bump_value = false;
+        value = m_value + 2;
     }
 
-    float tmax = 0.0f;
-    for (const float f : vSamplesIn) {
-        if(f > tmax) tmax = f;
-    }
-    for (const float f : vSamplesOut) {
-        if(f > tmax) tmax = f;
-    }
-    fMax = tmax;
-    if (ttpoint >=0 && ttpoint < vTimeStamp.size()) ttpoint++; // Move the selected point to the left
+    value--;
+    m_value = std::min(value, VALUES_SIZE - 1);
+    m_range = m_values[m_value];
+    ttpoint = -1;
+    updateFmax();
     update();
-}
 
-void TrafficGraphWidget::setGraphRange(std::chrono::minutes new_range)
-{
-    m_range = new_range;
-    const auto msecs_per_sample{std::chrono::duration_cast<std::chrono::milliseconds>(m_range) / DESIRED_SAMPLES};
-    timer->stop();
-    timer->setInterval(msecs_per_sample);
-
-    clear();
-}
-
-void TrafficGraphWidget::clear()
-{
-    timer->stop();
-
-    vSamplesOut.clear();
-    vSamplesIn.clear();
-    vTimeStamp.clear();
-    fMax = 0.0f;
-
-    if(clientModel) {
-        nLastBytesIn = clientModel->node().getTotalBytesRecv();
-        nLastBytesOut = clientModel->node().getTotalBytesSent();
-    }
-    timer->start();
+    return m_values[m_value];
 }
