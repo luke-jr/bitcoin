@@ -76,7 +76,7 @@ class TestNode():
     To make things easier for the test writer, any unrecognised messages will
     be dispatched to the RPC connection."""
 
-    def __init__(self, i, datadir_path, *, chain, rpchost, timewait, timeout_factor, bitcoind, bitcoin_cli, coverage_dir, cwd, extra_conf=None, extra_args=None, use_cli=False, start_perf=False, use_valgrind=False, version=None, descriptors=False, v2transport=False):
+    def __init__(self, i, datadir_path, *, chain, rpchost, timewait, timeout_factor, bitcoind, bitcoin_cli, coverage_dir, cwd, extra_conf=None, extra_args=None, use_cli=False, start_perf=False, use_valgrind=False, version=None, descriptors=False, v2transport=False, expected_stderr_prefix=''):
         """
         Kwargs:
             start_perf (bool): If True, begin profiling the node with `perf` as soon as
@@ -166,6 +166,8 @@ class TestNode():
         self.timeout_factor = timeout_factor
 
         self.mocktime = None
+
+        self.expected_stderr_prefix = expected_stderr_prefix
 
     AddressKeyPair = collections.namedtuple('AddressKeyPair', ['address', 'key'])
     PRIV_KEYS = [
@@ -425,6 +427,8 @@ class TestNode():
         # Check that stderr is as expected
         self.stderr.seek(0)
         stderr = self.stderr.read().decode('utf-8').strip()
+        if len(self.expected_stderr_prefix):
+            expected_stderr = self.expected_stderr_prefix + (("\n" + expected_stderr) if len(expected_stderr) else '')
         if stderr != expected_stderr:
             raise AssertionError("Unexpected stderr {} != {}".format(stderr, expected_stderr))
 
@@ -658,6 +662,8 @@ class TestNode():
         Will throw if bitcoind starts without an error.
         Will throw if an expected_msg is provided and it does not match bitcoind's stdout."""
         assert not self.running
+        if len(self.expected_stderr_prefix):
+            expected_msg = self.expected_stderr_prefix + (("\n" + expected_msg) if len(expected_msg) else '')
         with tempfile.NamedTemporaryFile(dir=self.stderr_dir, delete=False) as log_stderr, \
              tempfile.NamedTemporaryFile(dir=self.stdout_dir, delete=False) as log_stdout:
             try:

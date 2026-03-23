@@ -556,6 +556,7 @@ class BitcoinTestFramework(metaclass=BitcoinTestMetaClass):
                 use_valgrind=self.options.valgrind,
                 descriptors=self.options.descriptors,
                 v2transport=self.options.v2transport,
+                expected_stderr_prefix=self.MAINNET_NORMAL_STDERR if (self.chain == '') else '',
             )
             self.nodes.append(test_node_i)
             if not test_node_i.version_is_at_least(170000):
