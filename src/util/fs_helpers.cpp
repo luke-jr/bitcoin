@@ -15,6 +15,7 @@
 
 #include <cerrno>
 #include <fstream>
+#include <limits>
 #include <map>
 #include <memory>
 #include <optional>
@@ -169,14 +170,22 @@ int RaiseFileDescriptorLimit(int nMinFD)
 #else
     struct rlimit limitFD;
     if (getrlimit(RLIMIT_NOFILE, &limitFD) != -1) {
-        if (limitFD.rlim_cur < (rlim_t)nMinFD) {
-            limitFD.rlim_cur = nMinFD;
-            if (limitFD.rlim_cur > limitFD.rlim_max)
+        if (limitFD.rlim_cur != RLIM_INFINITY && std::cmp_less(limitFD.rlim_cur, nMinFD)) {
+            const auto current_limit{limitFD.rlim_cur};
+            limitFD.rlim_cur = std::in_range<rlim_t>(nMinFD) ? static_cast<rlim_t>(nMinFD) : RLIM_INFINITY;
+            if (limitFD.rlim_max != RLIM_INFINITY && (limitFD.rlim_cur == RLIM_INFINITY || limitFD.rlim_cur > limitFD.rlim_max)) {
                 limitFD.rlim_cur = limitFD.rlim_max;
+            }
+            if (current_limit != limitFD.rlim_cur) {
             setrlimit(RLIMIT_NOFILE, &limitFD);
             getrlimit(RLIMIT_NOFILE, &limitFD);
+            }
         }
-        return limitFD.rlim_cur;
+        if (limitFD.rlim_cur == RLIM_INFINITY ||
+            std::cmp_greater_equal(limitFD.rlim_cur, std::numeric_limits<int>::max())) {
+            return std::numeric_limits<int>::max();
+        }
+        return static_cast<int>(limitFD.rlim_cur);
     }
     return nMinFD; // getrlimit failed, assume it's fine
 #endif
