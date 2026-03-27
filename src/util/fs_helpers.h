@@ -27,18 +27,7 @@ bool FileCommit(FILE* file);
 void DirectoryCommit(const fs::path& dirname);
 
 bool TruncateFile(FILE* file, unsigned int length);
-
-/**
- * Try to raise the file descriptor limit to the requested number.
- *
- * @param[in] min_fd  The requested minimum number of file descriptors.
- * @returns           The actual file descriptor limit. It may be lower or
- *                    higher than min_fd. Returns std::numeric_limits<int>::max()
- *                    if the OS imposes no limit (RLIM_INFINITY).
- *
- */
-int RaiseFileDescriptorLimit(int min_fd);
-
+int RaiseFileDescriptorLimit(int nMinFD);
 void AllocateFileRange(FILE* file, unsigned int offset, unsigned int length);
 
 /**

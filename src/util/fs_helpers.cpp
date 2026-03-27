@@ -157,22 +157,26 @@ bool TruncateFile(FILE* file, unsigned int length)
 #endif
 }
 
-int RaiseFileDescriptorLimit(int min_fd)
+/**
+ * this function tries to raise the file descriptor limit to the requested number.
+ * It returns the actual file descriptor limit (which may be more or less than nMinFD)
+ */
+int RaiseFileDescriptorLimit(int nMinFD)
 {
 #if defined(WIN32)
     return 2048;
 #else
     struct rlimit limitFD;
     if (getrlimit(RLIMIT_NOFILE, &limitFD) != -1) {
-        if (limitFD.rlim_cur != RLIM_INFINITY && std::cmp_less(limitFD.rlim_cur, min_fd)) {
+        if (limitFD.rlim_cur != RLIM_INFINITY && std::cmp_less(limitFD.rlim_cur, nMinFD)) {
             const auto current_limit{limitFD.rlim_cur};
-            limitFD.rlim_cur = std::in_range<rlim_t>(min_fd) ? static_cast<rlim_t>(min_fd) : RLIM_INFINITY;
+            limitFD.rlim_cur = std::in_range<rlim_t>(nMinFD) ? static_cast<rlim_t>(nMinFD) : RLIM_INFINITY;
             if (limitFD.rlim_max != RLIM_INFINITY && (limitFD.rlim_cur == RLIM_INFINITY || limitFD.rlim_cur > limitFD.rlim_max)) {
                 limitFD.rlim_cur = limitFD.rlim_max;
             }
             if (current_limit != limitFD.rlim_cur) {
-                setrlimit(RLIMIT_NOFILE, &limitFD);
-                getrlimit(RLIMIT_NOFILE, &limitFD);
+            setrlimit(RLIMIT_NOFILE, &limitFD);
+            getrlimit(RLIMIT_NOFILE, &limitFD);
             }
         }
         if (limitFD.rlim_cur == RLIM_INFINITY ||
@@ -181,7 +185,7 @@ int RaiseFileDescriptorLimit(int min_fd)
         }
         return static_cast<int>(limitFD.rlim_cur);
     }
-    return min_fd; // getrlimit failed, assume it's fine
+    return nMinFD; // getrlimit failed, assume it's fine
 #endif
 }
 
