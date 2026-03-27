@@ -162,25 +162,24 @@ int RaiseFileDescriptorLimit(int min_fd)
 #if defined(WIN32)
     return 2048;
 #else
-    static_assert(std::numeric_limits<rlim_t>::digits >= std::numeric_limits<int>::digits);
     struct rlimit limitFD;
     if (getrlimit(RLIMIT_NOFILE, &limitFD) != -1) {
+        if (limitFD.rlim_cur != RLIM_INFINITY && std::cmp_less(limitFD.rlim_cur, min_fd)) {
+            const auto current_limit{limitFD.rlim_cur};
+            limitFD.rlim_cur = std::in_range<rlim_t>(min_fd) ? static_cast<rlim_t>(min_fd) : RLIM_INFINITY;
+            if (limitFD.rlim_max != RLIM_INFINITY && (limitFD.rlim_cur == RLIM_INFINITY || limitFD.rlim_cur > limitFD.rlim_max)) {
+                limitFD.rlim_cur = limitFD.rlim_max;
+            }
+            if (current_limit != limitFD.rlim_cur) {
+                setrlimit(RLIMIT_NOFILE, &limitFD);
+                getrlimit(RLIMIT_NOFILE, &limitFD);
+            }
+        }
         if (limitFD.rlim_cur == RLIM_INFINITY ||
-            limitFD.rlim_cur >= static_cast<rlim_t>(std::numeric_limits<int>::max())) {
-            // Some platforms implement RLIM_INFINITY as the maximum uint64,
-            // others as int64 (-1). Avoid casting even if the return type
-            // is changed to uint64_t. We also cap unlikely but possible values
-            // that would overflow int.
+            std::cmp_greater_equal(limitFD.rlim_cur, std::numeric_limits<int>::max())) {
             return std::numeric_limits<int>::max();
         }
-        if (limitFD.rlim_cur < static_cast<rlim_t>(min_fd)) {
-            limitFD.rlim_cur = static_cast<rlim_t>(min_fd);
-            if (limitFD.rlim_cur > limitFD.rlim_max)
-                limitFD.rlim_cur = limitFD.rlim_max;
-            setrlimit(RLIMIT_NOFILE, &limitFD);
-            getrlimit(RLIMIT_NOFILE, &limitFD);
-        }
-        return limitFD.rlim_cur;
+        return static_cast<int>(limitFD.rlim_cur);
     }
     return min_fd; // getrlimit failed, assume it's fine
 #endif
