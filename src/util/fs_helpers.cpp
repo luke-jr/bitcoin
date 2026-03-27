@@ -14,6 +14,7 @@
 
 #include <cerrno>
 #include <fstream>
+#include <limits>
 #include <map>
 #include <memory>
 #include <optional>
@@ -156,19 +157,21 @@ bool TruncateFile(FILE* file, unsigned int length)
 #endif
 }
 
-/**
- * this function tries to raise the file descriptor limit to the requested number.
- * It returns the actual file descriptor limit (which may be more or less than nMinFD)
- */
-int RaiseFileDescriptorLimit(int nMinFD)
+int RaiseFileDescriptorLimit(int min_fd)
 {
 #if defined(WIN32)
     return 2048;
 #else
     struct rlimit limitFD;
     if (getrlimit(RLIMIT_NOFILE, &limitFD) != -1) {
-        if (limitFD.rlim_cur < (rlim_t)nMinFD) {
-            limitFD.rlim_cur = nMinFD;
+        if (limitFD.rlim_cur == RLIM_INFINITY) {
+            // Some platforms implement RLIM_INFINITY as the maximum uint64,
+            // others as int64 (-1). Avoid casting even if the return type
+            // is changed to uint64_t.
+            return std::numeric_limits<int>::max();
+        }
+        if (limitFD.rlim_cur < static_cast<rlim_t>(min_fd)) {
+            limitFD.rlim_cur = static_cast<rlim_t>(min_fd);
             if (limitFD.rlim_cur > limitFD.rlim_max)
                 limitFD.rlim_cur = limitFD.rlim_max;
             setrlimit(RLIMIT_NOFILE, &limitFD);
@@ -176,7 +179,7 @@ int RaiseFileDescriptorLimit(int nMinFD)
         }
         return limitFD.rlim_cur;
     }
-    return nMinFD; // getrlimit failed, assume it's fine
+    return min_fd; // getrlimit failed, assume it's fine
 #endif
 }
 
