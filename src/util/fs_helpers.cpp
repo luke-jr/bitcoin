@@ -162,12 +162,15 @@ int RaiseFileDescriptorLimit(int min_fd)
 #if defined(WIN32)
     return 2048;
 #else
+    static_assert(std::numeric_limits<rlim_t>::digits >= std::numeric_limits<int>::digits);
     struct rlimit limitFD;
     if (getrlimit(RLIMIT_NOFILE, &limitFD) != -1) {
-        if (limitFD.rlim_cur == RLIM_INFINITY) {
+        if (limitFD.rlim_cur == RLIM_INFINITY ||
+            limitFD.rlim_cur >= static_cast<rlim_t>(std::numeric_limits<int>::max())) {
             // Some platforms implement RLIM_INFINITY as the maximum uint64,
             // others as int64 (-1). Avoid casting even if the return type
-            // is changed to uint64_t.
+            // is changed to uint64_t. We also cap unlikely but possible values
+            // that would overflow int.
             return std::numeric_limits<int>::max();
         }
         if (limitFD.rlim_cur < static_cast<rlim_t>(min_fd)) {
