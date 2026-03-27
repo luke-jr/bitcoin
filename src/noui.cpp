@@ -44,7 +44,7 @@ bool noui_ThreadSafeMessageBox(const bilingual_str& message, const std::string& 
     }
 
     tfm::format(std::cerr, "%s%s\n", strCaption, message.original);
-    return false;
+    return (style & CClientUIInterface::DEFAULT_TRUE) ? true : false;
 }
 
 bool noui_ThreadSafeQuestion(const bilingual_str& /* ignored interactive message */, const std::string& message, const std::string& caption, unsigned int style)

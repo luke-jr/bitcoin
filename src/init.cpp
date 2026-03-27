@@ -645,6 +645,7 @@ void SetupServerArgs(ArgsManager& argsman, bool can_listen_ipc)
     argsman.AddArg("-uacomment=<cmt>", "Append comment to the user agent string", ArgsManager::ALLOW_ANY, OptionsCategory::DEBUG_TEST);
 
     SetupChainParamsBaseOptions(argsman);
+    argsman.AddArg("-consensusrules=<rules>", "Enforce the specified consensus rules (default: none).", ArgsManager::ALLOW_ANY, OptionsCategory::CHAINPARAMS);
 
     argsman.AddArg("-acceptnonstdtxn", strprintf("Relay and mine \"non-standard\" transactions (test networks only; default: %u)", DEFAULT_ACCEPT_NON_STD_TXN), ArgsManager::ALLOW_ANY | ArgsManager::DEBUG_ONLY, OptionsCategory::NODE_RELAY);
     argsman.AddArg("-incrementalrelayfee=<amt>", strprintf("Fee rate (in %s/kvB) used to define cost of relay, used for mempool limiting and replacement policy. (default: %s)", CURRENCY_UNIT, FormatMoney(DEFAULT_INCREMENTAL_RELAY_FEE)), ArgsManager::ALLOW_ANY | ArgsManager::DEBUG_ONLY, OptionsCategory::NODE_RELAY);
@@ -1362,6 +1363,63 @@ static ChainstateLoadResult InitAndLoadChainstate(
     return {status, error};
 };
 
+bool UserProtocolRulesCheck()
+{
+    const auto rules_requested{gArgs.GetArgs(CONSENSUSRULES_CONFIG_NAME)};
+    if (rules_requested.empty()) {
+        return true;
+    }
+    return InitError(strprintf(_("Unknown rule specified in -%s: %s"), CONSENSUSRULES_CONFIG_NAME, rules_requested.front()));
+}
+
+bool UserProtocolRulesConsent()
+{
+    static const std::string CONSENSUSRULES_MISSING{"rdts"};
+    bool require_rdts{false};
+    for (const auto& rulesok : gArgs.GetArgs(CONSENSUSRULES_CONFIG_NAME)) {
+        if (rulesok == CONSENSUSRULES_MISSING) {
+            LogPrintf("User already consented to '%s' consensus rules\n", CONSENSUSRULES_MISSING);
+            require_rdts = true;
+            break;
+        }
+    }
+
+    bilingual_str msg = strprintf(_(
+        "Bitcoin protocol change proposed\n"
+        "\n"
+        "A one-year \"reduced data\" protocol change to the Bitcoin rules, beginning no later than September, has been proposed. "
+        "This upgrade fixes an existential threat to the Bitcoin network.\n"
+        "\n"
+        "Protocol changes require user consent to be effective, and if enforced inconsistently within the community may compromise your security or others'!\n"
+        "\n"
+        "If you do not know what you are doing, you can learn more at %s.\n"
+        "\n"
+        "Note that to reject this softfork, you must implement your own rejection fork.\n"
+        "(You must make a decision either way - old versions are insecure in all scenarios.)\n"
+        "\n"
+        "This release of %s does NOT include the protocol change, and will be insecure when it activates. "
+        "You can download the latest version from %s."
+    ), "https://bitcoinknots.org/learn/2026-rdts",
+        CLIENT_NAME,
+        CLIENT_URL);
+    if (require_rdts) {
+        const bilingual_str msg_config_suffix = strprintf(_(
+            "To run this version, you must remove from your config files: %s"
+        ), CONSENSUSRULES_CONFIG_NAME + "=" + CONSENSUSRULES_MISSING);
+        msg += Untranslated("\n\n") + msg_config_suffix;
+    }
+
+    const bool consent = uiInterface.ThreadSafeQuestion(
+        _("Caution:") + Untranslated(" ") + msg,
+        msg.original
+        , "Caution",
+        require_rdts
+            ? (CClientUIInterface::ICON_WARNING | CClientUIInterface::BTN_ABORT | CClientUIInterface::MODAL)
+            : (CClientUIInterface::MSG_WARNING | CClientUIInterface::BTN_ABORT | CClientUIInterface::DEFAULT_TRUE));
+
+    return consent;
+}
+
 bool AppInitMain(NodeContext& node, interfaces::BlockAndHeaderTipInfo* tip_info)
 {
     const ArgsManager& args = *Assert(node.args);
@@ -1435,6 +1493,14 @@ bool AppInitMain(NodeContext& node, interfaces::BlockAndHeaderTipInfo* tip_info)
     // when load() and start() interface methods are called below.
     g_wallet_init_interface.Construct(node);
     uiInterface.InitWallet();
+
+    if (!(chainparams.IsTestChain() || UserProtocolRulesConsent())) {
+        return false;
+    }
+
+    if (!UserProtocolRulesCheck()) {
+        return false;
+    }
 
     if (interfaces::Ipc* ipc = node.init->ipc()) {
         for (std::string address : gArgs.GetArgs("-ipcbind")) {
