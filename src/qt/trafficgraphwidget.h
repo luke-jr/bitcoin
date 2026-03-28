@@ -9,8 +9,12 @@
 #include <QQueue>
 
 #include <chrono>
+#include <string>
 
 class ClientModel;
+namespace interfaces {
+class Node;
+}
 
 QT_BEGIN_NAMESPACE
 class QMouseEvent;
@@ -30,6 +34,8 @@ public:
     void setClientModel(ClientModel *model);
     bool GraphRangeBump() const { return m_bump_value; }
     unsigned int getCurrentRangeIndex() const { return m_value; }
+    quint64 getBaselineBytesRecv() const { return m_baseline_bytes_recv; }
+    quint64 getBaselineBytesSent() const { return m_baseline_bytes_sent; }
 
 protected:
     void paintEvent(QPaintEvent *) override;
@@ -47,7 +53,10 @@ public Q_SLOTS:
     int setGraphRange(int value);
 
 private:
+    void saveData();
     void paintPath(QPainterPath &path, QQueue<float>& samples);
+    bool loadDataFromBinary();
+    bool loadData();
     void updateRates(int value);
     void updateFmax();
 
@@ -63,6 +72,11 @@ private:
     int m_values[VALUES_SIZE] = {5, 10, 20, 45, 90, 3*60, 6*60, 12*60, 24*60, 3*24*60, 7*24*60, 14*24*60, 28*24*60};
     int64_t m_offset[VALUES_SIZE] = {};
     ClientModel* clientModel{nullptr};
+    std::string m_data_dir;
+    interfaces::Node* m_node{nullptr};
+    quint64 m_baseline_bytes_recv{0};
+    quint64 m_baseline_bytes_sent{0};
+    int64_t m_last_save_ms{0};
 
     int m_value{0};
     bool m_bump_value{false};
