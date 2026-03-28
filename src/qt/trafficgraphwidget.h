@@ -17,8 +17,10 @@ class Node;
 }
 
 QT_BEGIN_NAMESPACE
+class QFocusEvent;
 class QMouseEvent;
 class QPaintEvent;
+class QPainter;
 class QPainterPath;
 class QTimer;
 QT_END_NAMESPACE
@@ -43,7 +45,10 @@ protected:
     void mousePressEvent(QMouseEvent *event) override;
     bool fToggle = true;
     void mouseMoveEvent(QMouseEvent *event) override;
+    void mouseReleaseEvent(QMouseEvent* event) override;
+    void focusInEvent(QFocusEvent* event) override;
     int ttpoint = -1;
+    bool m_tt_in_series{true};
     int x_offset = 0;
     int y_offset = 0;
     int64_t tt_time = 0;
@@ -59,6 +64,8 @@ private:
     bool loadData();
     void updateRates(int value);
     void updateFmax();
+    void focusSlider(Qt::FocusReason reason);
+    void drawTooltipPoint(QPainter& painter);
 
     QTimer* m_timer{nullptr};
     float fMax{0.0f};
