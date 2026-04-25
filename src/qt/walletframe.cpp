@@ -21,7 +21,6 @@
 #include <Qt>
 #include <QApplication>
 #include <QClipboard>
-#include <QHBoxLayout>
 #include <QLabel>
 #include <QPushButton>
 #include <QVBoxLayout>
@@ -32,16 +31,11 @@ WalletFrame::WalletFrame(const PlatformStyle* _platformStyle, QWidget* parent)
       platformStyle(_platformStyle),
       m_size_hint(OverviewPage{platformStyle, nullptr}.sizeHint())
 {
-    // Leave HBox hook for adding a list view later
-    QHBoxLayout *walletFrameLayout = new QHBoxLayout(this);
+    QVBoxLayout *walletFrameLayout = new QVBoxLayout(this);
     setContentsMargins(0,0,0,0);
     walletStack = new QStackedWidget(this);
     walletFrameLayout->setContentsMargins(0,0,0,0);
-    walletFrameLayout->addWidget(walletStack);
-
-    // hbox for no wallet
-    QWidget* no_wallet_group = new QWidget(walletStack);
-    QVBoxLayout* no_wallet_layout = new QVBoxLayout(no_wallet_group);
+    walletFrameLayout->setSpacing(0);
 
     m_label_alerts = new QLabel(this);
     m_label_alerts->setVisible(false);
@@ -49,7 +43,12 @@ WalletFrame::WalletFrame(const PlatformStyle* _platformStyle, QWidget* parent)
     m_label_alerts->setWordWrap(true);
     m_label_alerts->setMargin(3);
     m_label_alerts->setTextInteractionFlags(Qt::TextSelectableByMouse);
-    no_wallet_layout->addWidget(m_label_alerts, 0, Qt::AlignTop);
+    walletFrameLayout->addWidget(m_label_alerts);
+    walletFrameLayout->addWidget(walletStack);
+
+    // hbox for no wallet
+    QWidget* no_wallet_group = new QWidget(walletStack);
+    QVBoxLayout* no_wallet_layout = new QVBoxLayout(no_wallet_group);
 
     QLabel *noWallet = new QLabel(tr("No wallet has been loaded.\nGo to File > Open Wallet to load a wallet.\n- OR -"));
     noWallet->setAlignment(Qt::AlignCenter);
