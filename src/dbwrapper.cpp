@@ -2,6 +2,8 @@
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
+#include <bitcoin-build-config.h> // IWYU pragma: keep
+
 #include <dbwrapper.h>
 
 #include <logging.h>
@@ -56,6 +58,7 @@ static void HandleError(const leveldb::Status& status)
 
 util::Result<void> dbwrapper_SanityCheck()
 {
+#ifndef EMBEDDED_LEVELDB
     unsigned long header_version = (leveldb::kMajorVersion << 16) | leveldb::kMinorVersion;
     unsigned long library_version = (leveldb_major_version() << 16) | leveldb_minor_version();
 
@@ -65,6 +68,7 @@ util::Result<void> dbwrapper_SanityCheck()
             leveldb_major_version(), leveldb_minor_version()
         ))};
     }
+#endif
 
     return {};
 }
