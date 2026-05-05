@@ -10,6 +10,10 @@ namespace node {
 
 void ApplyArgsManOptions(const ArgsManager& argsman, PeerManager::Options& options)
 {
+    if (auto value{argsman.GetIntArg("-maxstaleoutbound")}) {
+        options.maxstaleoutbound = std::clamp<int64_t>(*value, 0, std::numeric_limits<unsigned int>::max());
+    }
+
     if (auto value{argsman.GetBoolArg("-txreconciliation")}) options.reconcile_txs = *value;
 
     if (auto value{argsman.GetIntArg("-maxorphantx")}) {

@@ -799,7 +799,7 @@ private:
     std::atomic<int> m_wtxid_relay_peers{0};
 
     /** Number of outbound peers without NODE_REDUCED_DATA (BIP-110). Limited to 2. */
-    std::atomic<int> m_num_non_bip110_outbound{0};
+    std::atomic<unsigned int> m_num_non_bip110_outbound{0};
 
     /** Number of outbound peers with m_chain_sync.m_protect. */
     int m_outbound_peers_with_protect_from_disconnect GUARDED_BY(cs_main) = 0;
@@ -1597,8 +1597,8 @@ void PeerManagerImpl::FinalizeNode(const CNode& node)
         assert(m_wtxid_relay_peers >= 0);
         // Decrement non-BIP110 counter if this was a non-BIP110 outbound peer
         if (node.m_is_non_bip110_outbound) {
+            assert(m_num_non_bip110_outbound > 0);
             --m_num_non_bip110_outbound;
-            assert(m_num_non_bip110_outbound >= 0);
         }
     }
     CNodeState *state = State(nodeid);
@@ -3519,16 +3519,20 @@ void PeerManagerImpl::ProcessMessage(CNode& pfrom, const std::string& msg_type, 
         pfrom.m_has_all_wanted_services = HasAllDesirableServiceFlags(nServices);
         // BIP-110: Allow up to 2 non-BIP110 outbound peers.
         if (pfrom.ExpectServicesFromConn() && !(nServices & NODE_REDUCED_DATA)) {
-            if (m_num_non_bip110_outbound >= 2) {
-                LogDebug(BCLog::NET, "peer lacks NODE_REDUCED_DATA and already have 2 non-BIP110 outbound peers, %s\n",
+            if (m_num_non_bip110_outbound >= m_opts.maxstaleoutbound) {
+                LogDebug(BCLog::NET, "peer lacks NODE_REDUCED_DATA and already have %u non-BIP110 outbound peers (limit %u), %s\n",
+                         m_num_non_bip110_outbound,
+                         m_opts.maxstaleoutbound,
                          pfrom.DisconnectMsg(fLogIPs));
                 pfrom.fDisconnect = true;
                 return;
             }
             ++m_num_non_bip110_outbound;
             pfrom.m_is_non_bip110_outbound = true;
-            LogDebug(BCLog::NET, "connected to non-BIP110 outbound peer (%d/2), %s\n",
-                     m_num_non_bip110_outbound.load(), pfrom.ConnectionTypeAsString());
+            LogDebug(BCLog::NET, "connected to non-BIP110 outbound peer (%u/%u), %s\n",
+                     m_num_non_bip110_outbound.load(),
+                     m_opts.maxstaleoutbound,
+                     pfrom.ConnectionTypeAsString());
         }
         peer->m_their_services = nServices;
         pfrom.SetAddrLocal(addrMe);
