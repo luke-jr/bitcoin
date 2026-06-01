@@ -811,28 +811,33 @@ BOOST_AUTO_TEST_CASE(LocalAddress_BasicLifecycle)
 BOOST_AUTO_TEST_CASE(LocalAddress_nScore_Overflow)
 {
     g_reachable_nets.Add(NET_IPV4);
-    CService addr{UtilBuildAddress(0x002, 0x001, 0x001, 0x001), 1000}; // 2.1.1.1:1000
+    const CService addr{UtilBuildAddress(0x002, 0x001, 0x001, 0x001), 1000}; // 2.1.1.1:1000
 
-    // SeenLocal increments when nScore is below max
+    const auto get_score = [](const CService& service) -> int {
+        LOCK(g_maplocalhost_mutex);
+        const auto it = mapLocalHost.find(service);
+        return it != mapLocalHost.end() ? it->second.nScore : 0;
+    };
+
     const int initial_score = 1000;
     BOOST_REQUIRE(AddLocal(addr, initial_score));
     BOOST_REQUIRE(IsLocal(addr));
-    BOOST_CHECK_EQUAL(GetnScore(addr), initial_score);
+    BOOST_CHECK_EQUAL(get_score(addr), initial_score);
 
-    // SeenLocal increments the score
+    // SeenLocal should increment nScore by 1.
     BOOST_CHECK(SeenLocal(addr));
-    BOOST_CHECK_EQUAL(GetnScore(addr), initial_score + 1);
+    BOOST_CHECK_EQUAL(get_score(addr), initial_score + 1);
 
-    // SeenLocal saturates at max
-    RemoveLocal(addr);
+    // AddLocal() saturates nScore when updating an existing entry at INT_MAX.
     BOOST_REQUIRE(AddLocal(addr, std::numeric_limits<int>::max()));
-    BOOST_CHECK_EQUAL(GetnScore(addr), std::numeric_limits<int>::max());
+    BOOST_CHECK_EQUAL(get_score(addr), std::numeric_limits<int>::max());
 
-    // a couple increments should saturate
-    for (int i = 0; i < 2; ++i) {
-        BOOST_CHECK(SeenLocal(addr));
-        BOOST_CHECK_EQUAL(GetnScore(addr), std::numeric_limits<int>::max());
-    }
+    BOOST_CHECK(AddLocal(addr, std::numeric_limits<int>::max()));
+    BOOST_CHECK_EQUAL(get_score(addr), std::numeric_limits<int>::max());
+
+    // SeenLocal() also saturates at INT_MAX.
+    BOOST_CHECK(SeenLocal(addr));
+    BOOST_CHECK_EQUAL(get_score(addr), std::numeric_limits<int>::max());
 
     RemoveLocal(addr);
     BOOST_CHECK(!IsLocal(addr));
