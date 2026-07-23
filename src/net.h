@@ -73,6 +73,8 @@ static const int MAX_BLOCK_RELAY_ONLY_CONNECTIONS = 2;
 static const int MAX_FEELER_CONNECTIONS = 1;
 /** -listen default */
 static const bool DEFAULT_LISTEN = true;
+/** -v2onlyclearnet default */
+static constexpr bool DEFAULT_V2_ONLY_CLEARNET{false};
 /** The maximum number of peer connections to maintain. */
 static const unsigned int DEFAULT_MAX_PEER_CONNECTIONS = 125;
 /** The default for -maxuploadtarget. 0 = Unlimited */
@@ -1083,7 +1085,8 @@ public:
         bool m_i2p_accept_incoming;
         bool whitelist_forcerelay = DEFAULT_WHITELISTFORCERELAY;
         bool whitelist_relay = DEFAULT_WHITELISTRELAY;
-        bool disable_v1conn_clearnet = false;
+        bool m_capture_messages = false;
+        bool m_v2only_clearnet = DEFAULT_V2_ONLY_CLEARNET;
     };
 
     void Init(const Options& connOptions) EXCLUSIVE_LOCKS_REQUIRED(!m_added_nodes_mutex, !m_total_bytes_sent_mutex)
@@ -1121,8 +1124,12 @@ public:
         m_onion_binds = connOptions.onion_binds;
         whitelist_forcerelay = connOptions.whitelist_forcerelay;
         whitelist_relay = connOptions.whitelist_relay;
-        disable_v1conn_clearnet = connOptions.disable_v1conn_clearnet;
+        m_capture_messages = connOptions.m_capture_messages;
+        m_v2only_clearnet = connOptions.m_v2only_clearnet;
     }
+
+    // test only
+    void SetCaptureMessages(bool cap) { m_capture_messages = cap; }
 
     CConnman(uint64_t seed0, uint64_t seed1, AddrMan& addrman, const NetGroupManager& netgroupman,
              const CChainParams& params, bool network_active = true);
@@ -1275,12 +1282,9 @@ public:
     void WakeMessageHandler() EXCLUSIVE_LOCKS_REQUIRED(!mutexMsgProc);
 
     /** Return true if we should disconnect the peer for failing an inactivity check. */
-    bool ShouldRunInactivityChecks(const CNode& node, std::chrono::seconds now) const;
+    bool ShouldRunInactivityChecks(const CNode& node, std::chrono::microseconds now) const;
 
     bool MultipleManualOrFullOutboundConns(Network net) const EXCLUSIVE_LOCKS_REQUIRED(m_nodes_mutex);
-
-    /* Returns true if outbound v1 connections need to be disabled on IPV4/IPV6 network. */
-    bool DisableV1OnClearnet(Network net) const;
 
 private:
     struct ListenSocket {
@@ -1328,7 +1332,7 @@ private:
     void DisconnectNodes() EXCLUSIVE_LOCKS_REQUIRED(!m_reconnections_mutex, !m_nodes_mutex);
     void NotifyNumConnectionsChanged();
     /** Return true if the peer is inactive and should be disconnected. */
-    bool InactivityCheck(const CNode& node) const;
+    bool InactivityCheck(const CNode& node, std::chrono::microseconds now) const;
 
     /**
      * Generate a collection of sockets to check for IO readiness.
@@ -1418,6 +1422,24 @@ private:
      * @return           bool        Whether a preferred network was found.
      */
     bool MaybePickPreferredNetwork(std::optional<Network>& network);
+
+    /**
+     * Whether an outbound connection to this destination must be v2 only.
+     *
+     * Returns true when -v2onlyclearnet is set AND either:
+     *   - the resolved address is clearnet (IPv4/IPv6) OR
+     *   - the address is unresolved and a destination string was supplied.
+     *     if bitcoind delegates DNS to a name proxy (ex: Tor), we can't tell
+     *     locally whether the name resolves to clearnet or not, so we assume
+     *     the worst case and require v2 to avoid sending plaintext.
+     *
+     * Connections to non-routable (local/loopback) addresses can be v1 since
+     * their traffic never leaves the LAN.
+     *
+     * @param addr      target address (maybe unresolved)
+     * @param dest_name destination string (or empty if connecting by resolved address)
+     */
+    bool RequiresV2ForOutbound(const CNetAddr& addr, std::string_view dest_name) const;
 
     // Whether the node should be passed out in ForEach* callbacks
     static bool NodeFullyConnected(const CNode* pnode);
@@ -1609,11 +1631,16 @@ private:
     bool whitelist_relay;
 
     /**
-     * option for disabling outbound v1 connections on IPV4 and IPV6.
-     * outbound connections on IPV4/IPV6 need to be v2 connections.
-     * outbound connections on Tor/I2P/CJDNS can be v1 or v2 connections.
+     * flag for whether messages are captured
      */
-    bool disable_v1conn_clearnet;
+    bool m_capture_messages{false};
+
+    /**
+     * option for restricting outbound clearnet connections (IPv4/IPv6) to v2 only.
+     * outbound connections to IPv4/IPv6 need to be v2 connections.
+     * outbound connections to Tor/I2P/CJDNS can be v1 or v2 connections.
+     */
+    bool m_v2only_clearnet{DEFAULT_V2_ONLY_CLEARNET};
 
     /**
      * Mutex protecting m_i2p_sam_sessions.
