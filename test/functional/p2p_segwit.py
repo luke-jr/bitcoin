@@ -1977,6 +1977,14 @@ class SegWitTest(BitcoinTestFramework):
         self.update_witness_block_with_transactions(block_6, [p2sh_tx])
         test_witness_block(self.nodes[0], self.test_node, block_6, accepted=False, reason='bad-blk-sigops')
 
+        p2sh_tx.vin.append(CTxIn(COutPoint(tx.sha256, outputs - 2), b""))
+        p2sh_tx.wit.vtxinwit = [CTxInWitness() for _ in p2sh_tx.vin]
+        p2sh_tx.wit.vtxinwit[-1].scriptWitness.stack = [witness_script_toomany]
+        p2sh_tx.rehash()
+        block_7 = self.build_next_block()
+        self.update_witness_block_with_transactions(block_7, [p2sh_tx])
+        test_witness_block(self.nodes[0], self.test_node, block_7, accepted=False, reason='bad-blk-sigops')
+
         # Cleanup and prep for next test
         self.utxo.pop(0)
         self.utxo.append(UTXO(tx2.sha256, 0, tx2.vout[0].nValue))
