@@ -1433,16 +1433,13 @@ unsigned int PolicyScriptVerifyFlags(const ignore_rejects_type& ignore_rejects)
         return STANDARD_SCRIPT_VERIFY_FLAGS;
     }
     if (ignore_rejects.count("non-mandatory-script-verify-flag")) {
-        return MANDATORY_SCRIPT_VERIFY_FLAGS;
+        return MANDATORY_SCRIPT_VERIFY_FLAGS | REDUCED_DATA_MANDATORY_VERIFY_FLAGS;
     }
 
     unsigned int flags = STANDARD_SCRIPT_VERIFY_FLAGS;
     if (ignore_rejects.count("non-mandatory-script-verify-flag-upgradable")) {
         constexpr unsigned int upgradable_policy_flags =
             SCRIPT_VERIFY_DISCOURAGE_UPGRADABLE_NOPS |
-            SCRIPT_VERIFY_DISCOURAGE_UPGRADABLE_WITNESS_PROGRAM |
-            SCRIPT_VERIFY_DISCOURAGE_UPGRADABLE_TAPROOT_VERSION |
-            SCRIPT_VERIFY_DISCOURAGE_OP_SUCCESS |
             SCRIPT_VERIFY_DISCOURAGE_UPGRADABLE_PUBKEYTYPE;
         flags &= ~upgradable_policy_flags;
     } else {
@@ -1485,7 +1482,7 @@ unsigned int PolicyScriptVerifyFlags(const ignore_rejects_type& ignore_rejects)
     if (ignore_rejects.count("non-mandatory-script-verify-flag-const_scriptcode")) {
         flags &= ~SCRIPT_VERIFY_CONST_SCRIPTCODE;
     }
-    flags |= MANDATORY_SCRIPT_VERIFY_FLAGS;  // for safety
+    flags |= MANDATORY_SCRIPT_VERIFY_FLAGS | REDUCED_DATA_MANDATORY_VERIFY_FLAGS;  // for safety
     return flags;
 }
 
