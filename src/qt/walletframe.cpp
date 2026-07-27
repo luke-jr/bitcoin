@@ -19,30 +19,38 @@
 #include <fstream>
 #include <string>
 
+#include <Qt>
 #include <QApplication>
 #include <QClipboard>
-#include <QGroupBox>
-#include <QHBoxLayout>
 #include <QLabel>
 #include <QPushButton>
 #include <QVBoxLayout>
+#include <QWidget>
 
 WalletFrame::WalletFrame(const PlatformStyle* _platformStyle, QWidget* parent)
     : QFrame(parent),
       platformStyle(_platformStyle),
       m_size_hint(OverviewPage{platformStyle, nullptr}.sizeHint())
 {
-    // Leave HBox hook for adding a list view later
-    QHBoxLayout *walletFrameLayout = new QHBoxLayout(this);
+    QVBoxLayout *walletFrameLayout = new QVBoxLayout(this);
     setContentsMargins(0,0,0,0);
     walletStack = new QStackedWidget(this);
     m_global_stack = new QStackedWidget(this);
     m_global_stack->addWidget(walletStack);
     walletFrameLayout->setContentsMargins(0,0,0,0);
+    walletFrameLayout->setSpacing(0);
+
+    m_label_alerts = new QLabel(this);
+    m_label_alerts->setVisible(false);
+    m_label_alerts->setStyleSheet("QLabel { background-color: qlineargradient(x1: 0, y1: 0, x2: 1, y2: 0, stop:0 #F0D0A0, stop:1 #F8D488); color:#000000; padding:1ex; }");
+    m_label_alerts->setWordWrap(true);
+    m_label_alerts->setMargin(3);
+    m_label_alerts->setTextInteractionFlags(Qt::TextSelectableByMouse);
+    walletFrameLayout->addWidget(m_label_alerts);
     walletFrameLayout->addWidget(m_global_stack);
 
     // hbox for no wallet
-    QGroupBox* no_wallet_group = new QGroupBox(walletStack);
+    QWidget* no_wallet_group = new QWidget(walletStack);
     QVBoxLayout* no_wallet_layout = new QVBoxLayout(no_wallet_group);
 
     QLabel *noWallet = new QLabel(tr("No wallet has been loaded.\nGo to File > Open Wallet to load a wallet.\n- OR -"));
@@ -71,6 +79,11 @@ void WalletFrame::setClientModel(ClientModel *_clientModel)
 
     for (auto i = mapWalletViews.constBegin(); i != mapWalletViews.constEnd(); ++i) {
         i.value()->setClientModel(_clientModel);
+    }
+
+    if (_clientModel) {
+        connect(_clientModel, &ClientModel::alertsChanged, this, &WalletFrame::updateAlerts);
+        updateAlerts(_clientModel->getStatusBarWarnings());
     }
 }
 
@@ -297,6 +310,12 @@ void WalletFrame::usedReceivingAddresses()
 WalletView* WalletFrame::currentWalletView() const
 {
     return qobject_cast<WalletView*>(walletStack->currentWidget());
+}
+
+void WalletFrame::updateAlerts(const QString &warnings)
+{
+    m_label_alerts->setVisible(!warnings.isEmpty());
+    m_label_alerts->setText(warnings);
 }
 
 WalletModel* WalletFrame::currentWalletModel() const
