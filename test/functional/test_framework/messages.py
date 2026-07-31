@@ -99,6 +99,33 @@ def hash256(s):
     return sha256(sha256(s))
 
 
+def blake2b(s):
+    return hashlib.blake2b(s, digest_size=32).digest()
+
+
+# PoW-change schedule mirrored from the node so block hashes match. Inert by
+# default (every block is SHA256d), matching a default regtest node. A test that
+# starts a node with -powchangetime must mirror it here via set_pow_change().
+_pow_change_time = None
+_pow_change_algo = blake2b
+
+
+def set_pow_change(change_time, algo=blake2b):
+    """Mirror a node's -powchangetime=time[:algo] configuration so that powhash()
+    selects the same algorithm the node's PowAlgorithmForTime() does."""
+    global _pow_change_time, _pow_change_algo
+    _pow_change_time = change_time
+    _pow_change_algo = algo
+
+
+def powhash(s, n_time):
+    """Proof-of-work hash of a serialized 80-byte header, selecting the algorithm
+    the way Consensus::Params::PowAlgorithmForTime() does."""
+    if _pow_change_time is None or n_time < _pow_change_time:
+        return hash256(s)
+    return _pow_change_algo(s)
+
+
 def ser_compact_size(l):
     r = b""
     if l < 253:
@@ -748,8 +775,9 @@ class CBlockHeader:
             r += self.nTime.to_bytes(4, "little")
             r += self.nBits.to_bytes(4, "little")
             r += self.nNonce.to_bytes(4, "little")
-            self.sha256 = uint256_from_str(hash256(r))
-            self.hash = hash256(r)[::-1].hex()
+            rawhash = powhash(r, self.nTime)
+            self.sha256 = uint256_from_str(rawhash)
+            self.hash = rawhash[::-1].hex()
 
     def rehash(self):
         self.sha256 = None
