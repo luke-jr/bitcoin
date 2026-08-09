@@ -143,4 +143,131 @@ BOOST_AUTO_TEST_CASE(headers_sync_state)
     BOOST_CHECK(result.success);
 }
 
+// End-to-end: a peer serving the PoW-change fork block presyncs successfully,
+// while a peer claiming the same target drop without an algorithm change is
+// still rejected. Mainnet consensus parameters, where the gate is live.
+// HeadersSyncState does not itself verify proof of work, so the headers here
+// are unmined; only nBits and connectivity matter to this path.
+BOOST_AUTO_TEST_CASE(headers_sync_powchange_fork)
+{
+    const auto mainnet = CreateChainParams(*m_node.args, ChainType::MAIN);
+    Consensus::Params params = mainnet->GetConsensus();
+    BOOST_CHECK(!params.fPowAllowMinDifficultyBlocks);
+
+    // Must be in the past: m_max_commitments is derived from wall clock minus
+    // the chain_start time, so a future fork time starves the commitment budget.
+    const int64_t hf_time = 1700000000;
+    const uint32_t tip_nbits = 0x1702905c;
+
+    // The fork point the peer's headers branch from: pre-fork, non-boundary.
+    uint256 start_hash{uint256::ONE};
+    CBlockIndex chain_start;
+    chain_start.nHeight = 800000;
+    chain_start.nBits = tip_nbits;
+    chain_start.nTime = hf_time - 6000;
+    chain_start.phashBlock = &start_hash;
+    BOOST_CHECK((chain_start.nHeight + 1) % params.DifficultyAdjustmentInterval() != 0);
+
+    arith_uint256 shifted;
+    shifted.SetCompact(tip_nbits);
+    shifted <<= params.Blake2bTargetShift;
+    const uint32_t fork_nbits = shifted.GetCompact();
+
+    // Schedule the PoW change. chain_start stays pre-fork.
+    // FIXME: params.HardforkTime = hf_time;
+
+    // Two headers building on chain_start. The second one is the variable:
+    // its timestamp decides whether it crosses the fork, and its nBits is what
+    // the difficulty gate judges.
+    // connect_hash must match m_last_header_received, which the sync seeds
+    // from chain_start->GetBlockHeader(), not from phashBlock.
+    const uint256 connect_hash{chain_start.GetBlockHeader().GetHash()};
+
+    auto build_chain = [&](uint32_t second_time, uint32_t second_nbits) {
+        std::vector<CBlockHeader> headers(2);
+        headers[0].nVersion = 4;
+        headers[0].hashPrevBlock = connect_hash;
+        headers[0].nTime = hf_time - 1200;
+        headers[0].nBits = tip_nbits;
+        headers[1].nVersion = 4;
+        headers[1].hashPrevBlock = headers[0].GetHash();
+        headers[1].nTime = second_time;
+        headers[1].nBits = second_nbits;
+        return headers;
+    };
+
+    // Keep the required work out of reach so the sync stays in PRESYNC.
+    const arith_uint256 minimum_required_work{UintToArith256(params.nMinimumChainWork)};
+
+    auto presyncs = [&](const std::vector<CBlockHeader>& headers) {
+        HeadersSyncState hss(/*id=*/0, params, &chain_start, minimum_required_work);
+        const auto result = hss.ProcessNextHeaders(headers, /*full_headers_message=*/true);
+        return result.success && hss.GetState() == HeadersSyncState::State::PRESYNC;
+    };
+
+    BOOST_CHECK_NE(fork_nbits, tip_nbits);
+
+    // Ordinary pre-fork chain, difficulty unchanged.
+    BOOST_CHECK(presyncs(build_chain(hf_time - 600, tip_nbits)));
+
+    // Crossing the fork with the shifted target: this is what used to abort.
+    BOOST_CHECK(presyncs(build_chain(hf_time, fork_nbits)));
+
+    // Claiming the shifted target without crossing the fork: still rejected.
+    BOOST_CHECK(!presyncs(build_chain(hf_time - 600, fork_nbits)));
+
+    // Crossing the fork but taking more slack than the shift grants: rejected.
+    arith_uint256 too_easy;
+    too_easy.SetCompact(fork_nbits);
+    too_easy <<= 4;
+    BOOST_CHECK(!presyncs(build_chain(hf_time, too_easy.GetCompact())));
+}
+
+// Adversarial: header timestamps are not monotonic in presync, so a peer can
+// alternate them across HardforkTime. If the shift is granted on every
+// algorithm difference rather than only on the forward crossing, each header
+// gets another 2^20 of slack and the chain collapses to powLimit for free.
+BOOST_AUTO_TEST_CASE(headers_sync_powchange_oscillation)
+{
+    const auto mainnet = CreateChainParams(*m_node.args, ChainType::MAIN);
+    Consensus::Params params = mainnet->GetConsensus();
+    const int64_t hf_time = 1700000000;
+    const uint32_t tip_nbits = 0x1702905c;
+
+    uint256 start_hash{uint256::ONE};
+    CBlockIndex chain_start;
+    chain_start.nHeight = 800000;
+    chain_start.nBits = tip_nbits;
+    chain_start.nTime = hf_time - 6000;
+    chain_start.phashBlock = &start_hash;
+
+    // FIXME: params.HardforkTime = hf_time;
+
+    std::vector<CBlockHeader> headers;
+    uint256 prev{chain_start.GetBlockHeader().GetHash()};
+    uint32_t nbits = tip_nbits;
+    for (int i = 0; i < 8; ++i) {
+        arith_uint256 t;
+        t.SetCompact(nbits);
+        t <<= params.Blake2bTargetShift;
+        const arith_uint256 lim = UintToArith256(params.powLimit);
+        if (t > lim) t = lim;
+        nbits = t.GetCompact();
+
+        CBlockHeader h;
+        h.nVersion = 4;
+        h.hashPrevBlock = prev;
+        // Alternate across the fork time on every header.
+        h.nTime = (i % 2 == 0) ? hf_time : hf_time - 600;
+        h.nBits = nbits;
+        headers.push_back(h);
+        prev = h.GetHash();
+    }
+
+    HeadersSyncState hss(0, params, &chain_start, UintToArith256(params.nMinimumChainWork));
+    const auto result = hss.ProcessNextHeaders(headers, true);
+    BOOST_TEST_MESSAGE("final nbits=" << std::hex << nbits << " accepted=" << result.success);
+    BOOST_CHECK(!result.success);
+}
+
 BOOST_AUTO_TEST_SUITE_END()
