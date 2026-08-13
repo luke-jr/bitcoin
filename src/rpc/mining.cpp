@@ -643,6 +643,7 @@ static RPCHelpMan getblocktemplate()
                 {"rules", RPCArg::Type::ARR, RPCArg::Optional::NO, "A list of strings",
                 {
                     {"segwit", RPCArg::Type::STR, RPCArg::Optional::NO, "(literal) indicates client side segwit support"},
+                    {"blake2b", RPCArg::Type::STR, RPCArg::Optional::OMITTED, "(literal) indicates client side BLAKE2b header support"},
                     {"str", RPCArg::Type::STR, RPCArg::Optional::OMITTED, "other client side supported softfork deployment"},
                 }},
                 {"longpollid", RPCArg::Type::STR, RPCArg::Optional::OMITTED, "delay processing request until the result would vary significantly from the \"longpollid\" of a prior template"},
@@ -1018,6 +1019,12 @@ static UniValue TemplateToJSON(const Consensus::Params& consensusParams, const C
         // when attempting to mine with this template
         aRules.push_back("!signet");
     }
+    if (block.m_header_v2) {
+        aRules.push_back("!blake2b");
+        if (!setClientRules.count("blake2b")) {
+            throw JSONRPCError(RPC_INVALID_PARAMETER, "Support for 'blake2b' rule requires explicit client support");
+        }
+    }
 
     UniValue vbavailable(UniValue::VOBJ);
     uint32_t vbrequired = 0;
@@ -1064,7 +1071,7 @@ static UniValue TemplateToJSON(const Consensus::Params& consensusParams, const C
             }
         }
     }
-    result.pushKV("version", block_header.nVersion);
+    result.pushKV("version", block_header.GetCompleteVersion());
     result.pushKV("rules", std::move(aRules));
     result.pushKV("vbavailable", std::move(vbavailable));
     result.pushKV("vbrequired", vbrequired);
