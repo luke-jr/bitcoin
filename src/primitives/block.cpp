@@ -38,6 +38,7 @@ uint256 CBlockHeader::GetHash() const
     auto h1 = TaggedHash("Bitcoin block header 1");
     h1 << nVersion;
     h1 << hashMerkleRoot;
+    h1 << m_height;
     h1 << nTime;
     h1 << (uint32_t)0;  // Reserved for extended 64-bit time
     h1 << nBits;
@@ -45,7 +46,7 @@ uint256 CBlockHeader::GetHash() const
     h1 << m_reserved;
     h1 << m_xor_key_mask_clear_bits;
     h1 << xor_key_hash.GetSHA256();
-    Assert(h1.BytesWritten() == 0x40 + 84);
+    Assert(h1.BytesWritten() == 0x40 + 88);
 
     DataStream ss;
     ss << (uint32_t)0;     // Final 3 bytes are part of Sv1 "coinb1" (first is implied by hasher)

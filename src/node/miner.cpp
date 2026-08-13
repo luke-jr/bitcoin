@@ -53,6 +53,7 @@ int64_t UpdateTime(CBlockHeader* pblock, const Consensus::Params& consensusParam
     if (nOldTime < nNewTime) {
         pblock->nTime = nNewTime;
     }
+    pblock->m_height = pblock->m_header_v2 ? pindexPrev->nHeight + 1 : 0;
 
     // Updating time can change work required on testnet:
     if (consensusParams.fPowAllowMinDifficultyBlocks) {

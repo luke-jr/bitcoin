@@ -4684,6 +4684,12 @@ static bool ContextualCheckBlockHeaderVolatile(const CBlockHeader& block, BlockV
 {
     const Consensus::Params& consensusParams = chainman.GetConsensus();
 
+    if (block.m_header_v2) {
+        if (block.m_height != pindexPrev->nHeight + 1) {
+            return state.Invalid(BlockValidationResult::BLOCK_CONSENSUS, "bad-header-height", "Height in block header does not match prevblock height+1");
+        }
+    }
+
     // Mandatory signaling for deployments approaching max_activation_height
     for (int i = 0; i < (int)Consensus::MAX_VERSION_BITS_DEPLOYMENTS; i++) {
         const Consensus::DeploymentPos pos = static_cast<Consensus::DeploymentPos>(i);
