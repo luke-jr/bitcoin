@@ -9,6 +9,8 @@
 #include <util/time.h>
 #include <util/vector.h>
 
+#include <limits>
+
 // The two constants below are computed using the simulation script in
 // contrib/devtools/headerssync-params.py.
 
@@ -287,7 +289,9 @@ std::vector<CBlockHeader> HeadersSyncState::PopHeadersReadyForAcceptance()
 
     while (m_redownloaded_headers.size() > REDOWNLOAD_BUFFER_SIZE ||
             (m_redownloaded_headers.size() > 0 && m_process_all_remaining_headers)) {
-        ret.emplace_back(CBlockHeader(m_redownloaded_headers.front(), m_redownload_buffer_first_prev_hash));
+        const int64_t height{m_redownload_buffer_last_height - static_cast<int64_t>(m_redownloaded_headers.size()) + 1};
+        Assume(height >= 0 && height <= std::numeric_limits<int32_t>::max());
+        ret.emplace_back(CBlockHeader(m_redownloaded_headers.front(), m_redownload_buffer_first_prev_hash, static_cast<int32_t>(height)));
         m_redownloaded_headers.pop_front();
         m_redownload_buffer_first_prev_hash = ret.back().GetHash();
     }
