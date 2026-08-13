@@ -17,12 +17,26 @@
 
 // A compressed CBlockHeader, which leaves out the prevhash
 struct CompressedHeader {
+    static constexpr uint32_t VERSION_HEADER_V2_FLAG{0x80000000};
+
     // header
+    bool m_header_v2{false};
     int32_t nVersion{0};
     uint256 hashMerkleRoot;
     uint32_t nTime{0};
     uint32_t nBits{0};
+    // Direct PoW/ASIC grinding:
     uint32_t nNonce{0};
+    uint32_t m_nonce2{0};
+    uint64_t m_nonce3{0};
+    // Sv1 extranonce:
+    uint128 m_extranonce{};
+    // Header 1 effectively-nonce, reserved:
+    uint16_t m_reserved1{0};
+    uint8_t m_reserved{0};
+
+    uint8_t m_xor_key_mask_clear_bits{0};
+    uint128 m_xor_key{};
 
     CompressedHeader()
     {
@@ -37,6 +51,11 @@ struct CompressedHeader {
     int64_t GetBlockTime() const
     {
         return (int64_t)nTime;
+    }
+
+    uint32_t GetCompleteVersion() const
+    {
+        return (m_header_v2 ? VERSION_HEADER_V2_FLAG : uint32_t{0}) | ((uint32_t)nVersion & ~VERSION_HEADER_V2_FLAG);
     }
 };
 
@@ -65,21 +84,58 @@ public:
     {
     }
 
-    SERIALIZE_METHODS(CBlockHeader, obj) { READWRITE(obj.nVersion, obj.hashPrevBlock, obj.hashMerkleRoot, obj.nTime, obj.nBits, obj.nNonce); }
+    SERIALIZE_METHODS(CBlockHeader, obj) {
+        uint32_t v;
+        SER_WRITE(obj, v = obj.GetCompleteVersion());
+        READWRITE(v, obj.hashPrevBlock, obj.hashMerkleRoot, obj.nTime, obj.nBits, obj.nNonce);
+        SER_READ(obj, obj.m_header_v2 = v & VERSION_HEADER_V2_FLAG);
+        SER_READ(obj, obj.nVersion = v & ~VERSION_HEADER_V2_FLAG);
+        if (obj.m_header_v2) {
+            READWRITE(obj.m_nonce2, obj.m_nonce3, obj.m_extranonce, obj.m_reserved1, obj.m_reserved, obj.m_xor_key_mask_clear_bits, obj.m_xor_key);
+        } else {
+            SER_READ(obj, obj.m_nonce2 = 0);
+            SER_READ(obj, obj.m_nonce3 = 0);
+            SER_READ(obj, obj.m_extranonce.SetNull());
+            SER_READ(obj, obj.m_reserved1 = 0);
+            SER_READ(obj, obj.m_reserved = 0);
+            SER_READ(obj, obj.m_xor_key_mask_clear_bits = 0);
+            SER_READ(obj, obj.m_xor_key.SetNull());
+        }
+    }
 
     void SetNull()
     {
+        m_header_v2 = false;
         nVersion = 0;
         hashPrevBlock.SetNull();
         hashMerkleRoot.SetNull();
         nTime = 0;
         nBits = 0;
         nNonce = 0;
+        m_nonce2 = 0;
+        m_nonce3 = 0;
+        m_extranonce.SetNull();
+        m_reserved1 = 0;
+        m_reserved = 0;
+        m_xor_key_mask_clear_bits = 0;
+        m_xor_key.SetNull();
     }
 
     bool IsNull() const
     {
         return (nBits == 0);
+    }
+
+    bool AreHeaderV2FieldsNull() const {
+        if (m_header_v2) return false;
+        if (m_nonce2) return false;
+        if (m_nonce3) return false;
+        if (!m_extranonce.IsNull()) return false;
+        if (m_reserved1) return false;
+        if (m_reserved) return false;
+        if (m_xor_key_mask_clear_bits) return false;
+        if (!m_xor_key.IsNull()) return false;
+        return true;
     }
 
     uint256 GetHash() const;
