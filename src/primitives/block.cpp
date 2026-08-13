@@ -5,12 +5,73 @@
 
 #include <primitives/block.h>
 
+#include <crypto/blake2.h>
 #include <hash.h>
+#include <streams.h>
 #include <tinyformat.h>
 
 uint256 CBlockHeader::GetHash() const
 {
-    return (HashWriter{} << *this).GetHash();
+    if (!m_header_v2) {  // SHA256d
+        // Historical algorithm and common case.
+        Assume(AreHeaderV2FieldsNull());
+        return (HashWriter{} << *this).GetHash();
+    }
+
+    // BLAKE2b
+
+    // The pooling miner doesn't know m_xor_key (only the hash of it) until it finds a block
+    auto xor_key_hash = TaggedHash("Bitcoin block hash PoW XOR key");
+    xor_key_hash << m_xor_key;
+    Assert(xor_key_hash.BytesWritten() == 0x40 + 0x10);  // TaggedHash adds 0x40 bytes extra
+
+    uint256 xor_key_mask;
+    if (!m_xor_key.IsNull()) {
+        xor_key_mask = (TaggedHash("Bitcoin block hash PoW XOR mask") << m_xor_key).GetSHA256();
+        const unsigned int xor_key_mask_clear_bytes = m_xor_key_mask_clear_bits / 8;
+        std::fill_n(xor_key_mask.begin(), xor_key_mask_clear_bytes, uint8_t{0});
+        xor_key_mask.begin()[xor_key_mask_clear_bytes] &= 0xffU >> (m_xor_key_mask_clear_bits % 8);
+    }
+
+    // These fields are invisible to the mining machine
+    // This means the hasher cannot brick itself at some future block version, time, or difficulty
+    auto h1 = TaggedHash("Bitcoin block header 1");
+    h1 << nVersion;
+    h1 << hashMerkleRoot;
+    h1 << nTime;
+    h1 << (uint32_t)0;  // Reserved for extended 64-bit time
+    h1 << nBits;
+    h1 << m_reserved1;
+    h1 << m_reserved;
+    h1 << m_xor_key_mask_clear_bits;
+    h1 << xor_key_hash.GetSHA256();
+    Assert(h1.BytesWritten() == 0x40 + 84);
+
+    DataStream ss;
+    ss << (uint32_t)0;     // Final 3 bytes are part of Sv1 "coinb1" (first is implied by hasher)
+    ss << h1.GetSHA256();  // Remainder of Sv1 "coinb1"
+    ss << m_extranonce;    // Sv1 "extranonce"
+    Assert(ss.size() == 52);
+
+    uint256 hash;
+    Assert(0 == blake2b((void*)hash.begin(), hash.size(), (void*)ss.data(), ss.size(), nullptr, 0));
+
+    ss.clear();
+    ss << hashPrevBlock;
+    ss << nNonce;
+    ss << m_nonce2;
+    ss << m_nonce3;
+    ss << hash;
+    Assert(ss.size() == 80);
+
+    Assert(0 == blake2b((void*)hash.begin(), hash.size(), (void*)ss.data(), ss.size(), nullptr, 0));
+
+    uint256 final_hash;
+    for (size_t i = 0; i < hash.size(); ++i) {
+        final_hash.end()[-1-i] = hash.begin()[i] ^ xor_key_mask.begin()[i];
+    }
+
+    return final_hash;
 }
 
 std::string CBlock::ToString() const
