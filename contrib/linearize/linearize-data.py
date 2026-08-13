@@ -21,7 +21,52 @@ from collections import namedtuple
 settings = {}
 
 def calc_hash_str(blk_hdr):
-    blk_hdr_hash = hashlib.sha256(hashlib.sha256(blk_hdr).digest()).digest()
+    version = struct.unpack("<I", blk_hdr[:4])[0]
+    if not version & 0x80000000:
+        blk_hdr_hash = hashlib.sha256(hashlib.sha256(blk_hdr).digest()).digest()
+        return blk_hdr_hash[::-1].hex()
+
+    nonce2 = blk_hdr[80:84]
+    nonce3 = blk_hdr[84:92]
+    extranonce = blk_hdr[92:108]
+    txcount = blk_hdr[108:110]
+    reserved = blk_hdr[110:111]
+    mask_clear_bits = blk_hdr[111]
+    xor_key = blk_hdr[112:128]
+    height = blk_hdr[128:132]
+    mm_rhs = blk_hdr[132:164]
+
+    xor_key_tag_hash = hashlib.sha256(b"Bitcoin block hash PoW XOR key").digest()
+    xor_key_hash = hashlib.sha256(xor_key_tag_hash + xor_key_tag_hash + xor_key).digest()
+    h1_data = (
+        (version & 0x7fffffff).to_bytes(4, "little")
+        + blk_hdr[36:68]
+        + height
+        + blk_hdr[68:72]
+        + b"\x00" * 4
+        + blk_hdr[72:76]
+        + txcount
+        + b"\x00" * 2
+        + reserved
+        + bytes([mask_clear_bits])
+        + xor_key_hash
+    )
+    h1_tag_hash = hashlib.sha256(b"Bitcoin block header 1").digest()
+    h1 = hashlib.sha256(h1_tag_hash + h1_tag_hash + h1_data).digest()
+    mm_tag_hash = hashlib.sha256(b"Merge-mining hook").digest()
+    h2 = hashlib.sha256(mm_tag_hash + mm_tag_hash + h1 + mm_rhs).digest()
+    hash1 = hashlib.blake2b(b"\x00" * 4 + h2 + extranonce, digest_size=32).digest()
+    blk_hdr_hash = hashlib.blake2b(
+        blk_hdr[4:36] + blk_hdr[76:80] + nonce2 + nonce3 + hash1,
+        digest_size=32,
+    ).digest()
+    if int.from_bytes(xor_key, "little"):
+        mask_tag_hash = hashlib.sha256(b"Bitcoin block hash PoW XOR mask").digest()
+        mask = bytearray(hashlib.sha256(mask_tag_hash + mask_tag_hash + xor_key).digest())
+        clear_bytes, remaining_bits = divmod(mask_clear_bits, 8)
+        mask[:clear_bytes] = b"\x00" * clear_bytes
+        mask[clear_bytes] &= 0xff >> remaining_bits
+        blk_hdr_hash = bytes(a ^ b for a, b in zip(blk_hdr_hash, mask))
     return blk_hdr_hash[::-1].hex()
 
 def get_blk_dt(blk_hdr):
@@ -224,8 +269,10 @@ class BlockDataCopier:
                 continue
             inLenLE = inhdr[4:]
             su = struct.unpack("<I", inLenLE)
-            inLen = su[0] - 80 # length without header
-            blk_hdr = self.read_xored(self.inF, 80)
+            version = self.read_xored(self.inF, 4)
+            header_size = 164 if struct.unpack("<I", version)[0] & 0x80000000 else 80
+            inLen = su[0] - header_size
+            blk_hdr = version + self.read_xored(self.inF, header_size - 4)
             inExtent = BlockExtent(self.inFn, self.inF.tell(), inhdr, blk_hdr, inLen)
 
             self.hash_str = calc_hash_str(blk_hdr)
