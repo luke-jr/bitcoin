@@ -48,15 +48,22 @@ uint256 CBlockHeader::GetHash() const
     h1 << xor_key_hash.GetSHA256();
     Assert(h1.BytesWritten() == 0x40 + 88);
 
+    auto h2 = TaggedHash("Merge-mining hook");
+    h2 << h1.GetSHA256();
+    h2 << m_mm_rhs;
+    Assert(h2.BytesWritten() == 0x40 + 0x40);
+
+    // These fields get sent to mining machines over Sv1
     DataStream ss;
     ss << (uint32_t)0;     // Final 3 bytes are part of Sv1 "coinb1" (first is implied by hasher)
-    ss << h1.GetSHA256();  // Remainder of Sv1 "coinb1"
+    ss << h2.GetSHA256();  // Remainder of Sv1 "coinb1"
     ss << m_extranonce;    // Sv1 "extranonce"
     Assert(ss.size() == 52);
 
     uint256 hash;
     Assert(0 == blake2b((void*)hash.begin(), hash.size(), (void*)ss.data(), ss.size(), nullptr, 0));
 
+    // Presumably the actual mining ASIC hardware sees these
     ss.clear();
     ss << hashPrevBlock;
     ss << nNonce;
