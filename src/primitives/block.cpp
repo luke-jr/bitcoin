@@ -43,7 +43,7 @@ uint256 CBlockHeader::GetHash() const
     h1 << (uint32_t)0;  // Reserved for extended 64-bit time
     h1 << nBits;
     h1 << (uint32_t)m_txcount;
-    h1 << m_reserved;
+    h1 << m_flags;
     h1 << m_xor_key_mask_clear_bits;
     h1 << xor_key_hash.GetSHA256();
     Assert(h1.BytesWritten() == 0x40 + 90);
@@ -65,12 +65,13 @@ uint256 CBlockHeader::GetHash() const
 
     // Presumably the actual mining ASIC hardware sees these
     ss.clear();
-    ss << hashPrevBlock.ReversedBytes();
-    ss << nNonce;
-    ss << m_nonce2;
-    ss << m_nonce3;
-    ss << hash;
-    Assert(ss.size() == 80);
+    static constexpr uint128 zeros{};
+    switch (m_flags & 3) {
+        case 3: ss << zeros << zeros; [[fallthrough]];
+        case 2: ss << zeros << zeros << zeros; [[fallthrough]];
+        case 0: ss << hashPrevBlock.ReversedBytes() << nNonce << m_nonce2 << m_nonce3 << hash; break;
+        case 1: ss << nNonce << m_nonce2 << m_nonce3 << hash << hashPrevBlock.ReversedBytes(); break;
+    }
 
     Assert(0 == blake2b_nokey((void*)hash.begin(), hash.size(), (void*)ss.data(), ss.size()));
 
