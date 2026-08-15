@@ -2757,11 +2757,6 @@ bool Chainstate::ConnectBlock(const CBlock& block, BlockValidationState& state, 
     uint256 hashPrevBlock = pindex->pprev == nullptr ? uint256() : pindex->pprev->GetBlockHash();
     assert(hashPrevBlock == view.GetBestBlock());
 
-    if (!ContextualCheckBlockHeaderVolatile(block, state, m_chainman, pindex->pprev)) {
-        LogError("%s: Consensus::ContextualCheckBlockHeaderVolatile: %s\n", __func__, state.ToString());
-        return false;
-    }
-
     m_chainman.num_blocks_total++;
 
     // Special case for the genesis block, skipping connection of its transactions
@@ -2770,6 +2765,13 @@ bool Chainstate::ConnectBlock(const CBlock& block, BlockValidationState& state, 
         if (!fJustCheck)
             view.SetBestBlock(pindex->GetBlockHash());
         return true;
+    }
+
+    // Genesis has no previous block, so this must come after the special case
+    // above: ContextualCheckBlockHeaderVolatile dereferences pindexPrev.
+    if (!ContextualCheckBlockHeaderVolatile(block, state, m_chainman, pindex->pprev)) {
+        LogError("%s: Consensus::ContextualCheckBlockHeaderVolatile: %s\n", __func__, state.ToString());
+        return false;
     }
 
     bool fScriptChecks = true;
