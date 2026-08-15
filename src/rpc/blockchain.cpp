@@ -180,12 +180,21 @@ UniValue blockheaderToJSON(const CBlockIndex& tip, const CBlockIndex& blockindex
     int confirmations = ComputeNextBlockAndDepth(tip, blockindex, pnext);
     result.pushKV("confirmations", confirmations);
     result.pushKV("height", blockindex.nHeight);
+    result.pushKV("header_version", blockindex.m_header_v2 ? 2 : 0);
     result.pushKV("version", blockindex.nVersion);
     result.pushKV("versionHex", strprintf("%08x", blockindex.nVersion));
     result.pushKV("merkleroot", blockindex.hashMerkleRoot.GetHex());
     result.pushKV("time", blockindex.nTime);
     result.pushKV("mediantime", blockindex.GetMedianTimePast());
     result.pushKV("nonce", blockindex.nNonce);
+    if (blockindex.m_header_v2) {
+        result.pushKV("nonce2", blockindex.m_nonce2);
+        result.pushKV("nonce3", blockindex.m_nonce3);
+        result.pushKV("extranonce", HexStr(blockindex.m_extranonce));
+        result.pushKV("h1_reserved", blockindex.m_reserved);
+        result.pushKV("xor_key", HexStr(blockindex.m_xor_key));
+        result.pushKV("xor_key_mask_clear_bits", blockindex.m_xor_key_mask_clear_bits);
+    }
     result.pushKV("bits", strprintf("%08x", blockindex.nBits));
     result.pushKV("target", GetTarget(blockindex, pow_limit).GetHex());
     result.pushKV("difficulty", GetDifficulty(blockindex));
