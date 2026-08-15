@@ -14,7 +14,7 @@ uint256 CBlockHeader::GetHash() const
 {
     if (!m_header_v2) {  // SHA256d
         // Historical algorithm and common case.
-        Assume(HeaderV2FieldsNull());
+        Assume(AreHeaderV2FieldsNull());
         return (HashWriter{} << *this).GetHash();
     }
 

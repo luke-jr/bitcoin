@@ -41,17 +41,6 @@ struct CompressedHeader {
         hashMerkleRoot.SetNull();
     }
 
-    bool HeaderV2FieldsNull() const {
-        if (m_nonce2) return false;
-        if (m_nonce3) return false;
-        if (!m_extranonce.IsNull()) return false;
-        if (m_reserved1) return false;
-        if (m_reserved) return false;
-        if (m_xor_key_mask_clear_bits) return false;
-        if (!m_xor_key.IsNull()) return false;
-        return true;
-    }
-
     NodeSeconds Time() const
     {
         return NodeSeconds{std::chrono::seconds{nTime}};
@@ -129,6 +118,17 @@ public:
     bool IsNull() const
     {
         return (nBits == 0);
+    }
+
+    bool AreHeaderV2FieldsNull() const {
+        if (m_nonce2) return false;
+        if (m_nonce3) return false;
+        if (!m_extranonce.IsNull()) return false;
+        if (m_reserved1) return false;
+        if (m_reserved) return false;
+        if (m_xor_key_mask_clear_bits) return false;
+        if (!m_xor_key.IsNull()) return false;
+        return true;
     }
 
     uint256 GetHash() const;

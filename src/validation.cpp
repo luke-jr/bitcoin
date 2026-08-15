@@ -4341,7 +4341,7 @@ void ChainstateManager::ReceivedBlockTransactions(const CBlock& block, CBlockInd
 
 static bool CheckBlockHeader(const CBlockHeader& block, BlockValidationState& state, const Consensus::Params& consensusParams, bool fCheckPOW = true)
 {
-    if ((!block.m_header_v2) && !block.HeaderV2FieldsNull()) {
+    if ((!block.m_header_v2) && !block.AreHeaderV2FieldsNull()) {
         return state.Invalid(
             /*result=*/BlockValidationResult::BLOCK_MUTATED,
             /*reject_reason=*/"error-headerv1-with-v2-fields",
