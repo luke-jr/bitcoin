@@ -4348,8 +4348,8 @@ static bool CheckBlockHeader(const CBlockHeader& block, BlockValidationState& st
             /*debug_message=*/"THIS SHOULD BE IMPOSSIBLE, PLEASE REPORT IT");
     }
 
-    if (block.m_header_v2) {
-        return state.Invalid(BlockValidationResult::BLOCK_INVALID_HEADER, "high-hash", "Block header V2 not actually supported");
+    if (block.m_header_v2 && block.m_height < consensusParams.DeploymentHeight(Consensus::DEPLOYMENT_BLAKE2B)) {
+        return state.Invalid(BlockValidationResult::BLOCK_INVALID_HEADER, "bad-version-sha256d", strprintf("Blocks require SHA256d PoW until height %s", consensusParams.DeploymentHeight(Consensus::DEPLOYMENT_BLAKE2B)));
     }
 
     // Check proof of work matches claimed amount
@@ -4687,6 +4687,10 @@ static bool ContextualCheckBlockHeaderVolatile(const CBlockHeader& block, BlockV
     if (block.m_header_v2) {
         if (block.m_height != pindexPrev->nHeight + 1) {
             return state.Invalid(BlockValidationResult::BLOCK_CONSENSUS, "bad-header-height", "Height in block header does not match prevblock height+1");
+        }
+    } else {
+        if (pindexPrev->nHeight + 1 >= consensusParams.DeploymentHeight(Consensus::DEPLOYMENT_BLAKE2B)) {
+            return state.Invalid(BlockValidationResult::BLOCK_INVALID_HEADER, "bad-version-blake2b", "New blocks require BLAKE2b PoW");
         }
     }
 
