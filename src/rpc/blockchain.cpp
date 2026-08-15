@@ -191,7 +191,7 @@ UniValue blockheaderToJSON(const CBlockIndex& tip, const CBlockIndex& blockindex
         result.pushKV("nonce2", blockindex.m_nonce2);
         result.pushKV("nonce3", blockindex.m_nonce3);
         result.pushKV("extranonce", HexStr(blockindex.m_extranonce));
-        result.pushKV("h1_reserved", blockindex.m_reserved);
+        result.pushKV("h1_flags", blockindex.m_flags);
         result.pushKV("xor_key", HexStr(blockindex.m_xor_key));
         result.pushKV("xor_key_mask_clear_bits", blockindex.m_xor_key_mask_clear_bits);
     }
