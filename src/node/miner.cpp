@@ -207,6 +207,9 @@ std::shared_ptr<CBlockTemplate> BlockAssembler::CreateNewBlock()
     uint64_t nSerializeSize = GetSerializeSize(TX_WITH_WITNESS(*pblock));
     LogPrintf("CreateNewBlock(): total size: %u block weight: %u txs: %u fees: %ld sigops %d\n", nSerializeSize, GetBlockWeight(*pblock), nBlockTx, nFees, nBlockSigOpsCost);
 
+    pblock->m_header_v2 = chainparams.GetConsensus().IsBlake2bHeight(nHeight);
+    pblock->m_height = pblock->m_header_v2 ? nHeight : 0;
+
     // Fill in header
     pblock->hashPrevBlock  = pindexPrev->GetBlockHash();
     UpdateTime(pblock, chainparams.GetConsensus(), pindexPrev);
