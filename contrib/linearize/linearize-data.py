@@ -27,10 +27,11 @@ def calc_hash_str(blk_hdr):
         return blk_hdr_hash[::-1].hex()
 
     nonce2 = blk_hdr[80:84]
-    nonce3 = blk_hdr[84:92]
-    extranonce = blk_hdr[92:108]
+    nonce3 = blk_hdr[84:88]
+    extranonce = blk_hdr[88:104]
+    time_offset = blk_hdr[104:108]
     txcount = blk_hdr[108:110]
-    reserved = blk_hdr[110:111]
+    flags = blk_hdr[110:111]
     mask_clear_bits = blk_hdr[111]
     xor_key = blk_hdr[112:128]
     height = blk_hdr[128:132]
@@ -47,7 +48,7 @@ def calc_hash_str(blk_hdr):
         + blk_hdr[72:76]
         + txcount
         + b"\x00" * 2
-        + reserved
+        + flags
         + bytes([mask_clear_bits])
         + xor_key_hash
     )
@@ -56,10 +57,15 @@ def calc_hash_str(blk_hdr):
     mm_tag_hash = hashlib.sha256(b"Merge-mining hook").digest()
     h2 = hashlib.sha256(mm_tag_hash + mm_tag_hash + h1 + mm_rhs).digest()
     hash1 = hashlib.blake2b(b"\x00" * 4 + h2 + extranonce, digest_size=32).digest()
-    blk_hdr_hash = hashlib.blake2b(
-        blk_hdr[4:36][::-1] + blk_hdr[76:80] + nonce2 + nonce3 + hash1,
-        digest_size=32,
-    ).digest()
+    asic_input = blk_hdr[4:36][::-1] + blk_hdr[76:80] + nonce2 + time_offset + nonce3 + hash1
+    asic_profile = flags[0] & 3
+    if asic_profile == 1:
+        asic_input = blk_hdr[76:80] + nonce2 + nonce3 + time_offset + hash1 + blk_hdr[4:36][::-1]
+    elif asic_profile == 2:
+        asic_input = b"\x00" * 48 + asic_input
+    elif asic_profile == 3:
+        asic_input = b"\x00" * 80 + asic_input
+    blk_hdr_hash = hashlib.blake2b(asic_input, digest_size=32).digest()
     if int.from_bytes(xor_key, "little"):
         mask_tag_hash = hashlib.sha256(b"Bitcoin block hash PoW XOR mask").digest()
         mask = bytearray(hashlib.sha256(mask_tag_hash + mask_tag_hash + xor_key).digest())
@@ -70,8 +76,9 @@ def calc_hash_str(blk_hdr):
     return blk_hdr_hash.hex()
 
 def get_blk_dt(blk_hdr):
-    members = struct.unpack("<I", blk_hdr[68:68+4])
-    nTime = members[0]
+    version, nTime = struct.unpack("<II", blk_hdr[:4] + blk_hdr[68:72])
+    if version & 0x80000000 and blk_hdr[110] & 4:
+        nTime = (nTime + int.from_bytes(blk_hdr[104:108], "little")) & 0xffffffff
     dt = datetime.datetime.fromtimestamp(nTime)
     dt_ym = datetime.datetime(dt.year, dt.month, 1)
     return (dt_ym, nTime)

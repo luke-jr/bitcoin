@@ -39,7 +39,7 @@ uint256 CBlockHeader::GetHash() const
     h1 << nVersion;
     h1 << hashMerkleRoot;
     h1 << m_height;
-    h1 << nTime;
+    h1 << GetTimeOnWire();
     h1 << (uint32_t)0;  // Reserved for extended 64-bit time
     h1 << nBits;
     h1 << (uint32_t)m_txcount;
@@ -69,8 +69,8 @@ uint256 CBlockHeader::GetHash() const
     switch (m_flags & 3) {
         case 3: ss << zeros << zeros; [[fallthrough]];
         case 2: ss << zeros << zeros << zeros; [[fallthrough]];
-        case 0: ss << hashPrevBlock.ReversedBytes() << nNonce << m_nonce2 << m_nonce3 << hash; break;
-        case 1: ss << nNonce << m_nonce2 << m_nonce3 << hash << hashPrevBlock.ReversedBytes(); break;
+        case 0: ss << hashPrevBlock.ReversedBytes() << nNonce << m_nonce2 << m_time_offset << m_nonce3 << hash; break;
+        case 1: ss << nNonce << m_nonce2 << m_nonce3 << m_time_offset << hash << hashPrevBlock.ReversedBytes(); break;
     }
 
     Assert(0 == blake2b_nokey((void*)hash.begin(), hash.size(), (void*)ss.data(), ss.size()));
