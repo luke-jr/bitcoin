@@ -71,6 +71,7 @@ void RegenerateCommitments(CBlock& block, ChainstateManager& chainman)
     const CBlockIndex* prev_block = WITH_LOCK(::cs_main, return chainman.m_blockman.LookupBlockIndex(block.hashPrevBlock));
     chainman.GenerateCoinbaseCommitment(block, prev_block);
 
+    block.m_txcount = block.m_header_v2 ? block.vtx.size() : 0;
     block.hashMerkleRoot = BlockMerkleRoot(block);
 }
 
@@ -212,6 +213,7 @@ std::shared_ptr<CBlockTemplate> BlockAssembler::CreateNewBlock()
     pblock->hashPrevBlock  = pindexPrev->GetBlockHash();
     pblock->m_height = pblock->m_header_v2 ? nHeight : 0;
     UpdateTime(pblock, chainparams.GetConsensus(), pindexPrev);
+    pblock->m_txcount      = pblock->m_header_v2 ? pblock->vtx.size() : 0;
     pblock->nBits          = GetNextWorkRequired(pindexPrev, pblock, chainparams.GetConsensus());
     pblock->nNonce         = 0;
     pblocktemplate->vTxSigOpsCost[0] = WITNESS_SCALE_FACTOR * GetLegacySigOpCount(*pblock->vtx[0]);
