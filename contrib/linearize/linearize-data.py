@@ -44,6 +44,7 @@ def calc_hash_str(blk_hdr):
         "Bitcoin block header 1",
         blk_hdr[:4]         # version
         + prevblock_ordered
+        + blk_hdr[128:132]  # height
         + blk_hdr[36:68]    # hashMerkleRoot
         + blk_hdr[68:72]    # time
         + b"\x00"
@@ -278,7 +279,7 @@ class BlockDataCopier:
             su = struct.unpack("<I", inLenLE)
             blk_hdr = self.read_xored(self.inF, 80)
             if blk_hdr[3] & 0x80:
-                blk_hdr += self.read_xored(self.inF, 48)
+                blk_hdr += self.read_xored(self.inF, 52)
             inLen = su[0] - len(blk_hdr)
             inExtent = BlockExtent(self.inFn, self.inF.tell(), inhdr, blk_hdr, inLen)
 
