@@ -149,8 +149,6 @@ std::string DescriptorChecksum(const Span<const char>& span)
     return ret;
 }
 
-std::string AddChecksum(const std::string& str) { return str + "#" + DescriptorChecksum(str); }
-
 ////////////////////////////////////////////////////////////////////////////
 // Internal representation                                                //
 ////////////////////////////////////////////////////////////////////////////
@@ -843,8 +841,11 @@ class PKDescriptor final : public DescriptorImpl
 private:
     const bool m_xonly;
 protected:
-    std::vector<CScript> MakeScripts(const std::vector<CPubKey>& keys, Span<const CScript>, FlatSigningProvider&) const override
+    std::vector<CScript> MakeScripts(const std::vector<CPubKey>& keys, Span<const CScript>, FlatSigningProvider& out) const override
     {
+        CKeyID id = keys[0].GetID();
+        out.pubkeys.emplace(id, keys[0]);
+
         if (m_xonly) {
             CScript script = CScript() << ToByteVector(XOnlyPubKey(keys[0])) << OP_CHECKSIG;
             return Vector(std::move(script));
@@ -2379,6 +2380,8 @@ std::string GetDescriptorChecksum(const std::string& descriptor)
     if (!CheckChecksum(sp, false, error, &ret)) return "";
     return ret;
 }
+
+std::string AddChecksum(const std::string& str) { return str + "#" + DescriptorChecksum(str); }
 
 std::unique_ptr<Descriptor> InferDescriptor(const CScript& script, const SigningProvider& provider)
 {

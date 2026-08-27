@@ -33,6 +33,12 @@ struct CCheckpointData {
         const auto& final_checkpoint = mapCheckpoints.rbegin();
         return final_checkpoint->first /* height */;
     }
+
+    bool CheckBlock(int height, const uint256& hash) const {
+        const auto i = mapCheckpoints.find(height);
+        if (i == mapCheckpoints.end()) return true;
+        return hash == i->second;
+    }
 };
 
 struct AssumeutxoHash : public BaseHash<uint256> {
@@ -137,6 +143,7 @@ public:
     struct SigNetOptions {
         std::optional<std::vector<uint8_t>> challenge{};
         std::optional<std::vector<std::string>> seeds{};
+        int64_t pow_target_spacing{10 * 60};
     };
 
     /**

@@ -9,6 +9,8 @@
 
 #include <logging.h>
 
+bool g_implicit_segwit = true;
+
 const SigningProvider& DUMMY_SIGNING_PROVIDER = SigningProvider();
 
 template<typename M, typename K, typename V>
@@ -82,6 +84,16 @@ bool FlatSigningProvider::GetTaprootBuilder(const XOnlyPubKey& output_key, Tapro
     return LookupHelper(tr_trees, output_key, builder);
 }
 
+void FlatSigningProvider::AddMasterKey(const CExtKey& key)
+{
+    CPubKey pubkey = key.Neuter().pubkey;
+    const auto id = pubkey.GetID();
+    KeyOriginInfo origin;
+    std::copy(key.vchFingerprint, key.vchFingerprint + sizeof(key.vchFingerprint), origin.fingerprint);
+    origins[id] = std::make_pair(pubkey, origin);
+    keys[id] = key.key;
+}
+
 FlatSigningProvider& FlatSigningProvider::Merge(FlatSigningProvider&& b)
 {
     scripts.merge(b.scripts);
@@ -107,7 +119,7 @@ void FillableSigningProvider::ImplicitlyLearnRelatedKeyScripts(const CPubKey& pu
     // "Implicitly" refers to fact that scripts are derived automatically from
     // existing keys, and are present in memory, even without being explicitly
     // loaded (e.g. from a file).
-    if (pubkey.IsCompressed()) {
+    if (pubkey.IsCompressed() && g_implicit_segwit) {
         CScript script = GetScriptForDestination(WitnessV0KeyHash(key_id));
         // This does not use AddCScript, as it may be overridden.
         CScriptID id(script);
