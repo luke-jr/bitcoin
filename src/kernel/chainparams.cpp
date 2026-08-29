@@ -117,6 +117,9 @@ public:
         consensus.vDeployments[Consensus::DEPLOYMENT_TAPROOT].nTimeout = 1628640000; // August 11th, 2021
         consensus.vDeployments[Consensus::DEPLOYMENT_TAPROOT].min_activation_height = 709632; // Approximately November 12th, 2021
 
+        consensus.Blake2bHeight = 961640;
+        consensus.Blake2bTargetShift = 22;
+
         // RDTS: its rules apply to every block from Blake2bHeight (the
         // flag-day activation, set at release cut) until the parent block's
         // median-time-past reaches RdtsExpiryTime. (RDTS previously activated
@@ -390,6 +393,9 @@ public:
         consensus.vDeployments[Consensus::DEPLOYMENT_TAPROOT].nStartTime = Consensus::BIP9Deployment::ALWAYS_ACTIVE;
         consensus.vDeployments[Consensus::DEPLOYMENT_TAPROOT].nTimeout = Consensus::BIP9Deployment::NO_TIMEOUT;
         consensus.vDeployments[Consensus::DEPLOYMENT_TAPROOT].min_activation_height = 0; // No activation delay
+
+        consensus.Blake2bHeight = 150308;
+        consensus.RdtsExpiryTime = 1791903600; // October 13th, 2026 15:00:00 UTC
 
         consensus.nMinimumChainWork = uint256{"0000000000000000000000000000000000000000000001d6dce8651b6094e4c1"};
         consensus.defaultAssumeValid = uint256{"0000000000003ed4f08dbdf6f7d6b271a6bcffce25675cb40aa9fa43179a89f3"}; // 72600
