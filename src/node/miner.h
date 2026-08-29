@@ -103,7 +103,7 @@ struct CompareTxIterByAncestorCount {
 };
 
 
-struct CTxMemPoolModifiedEntry_Indices final : boost::multi_index::indexed_by<
+using CTxMemPoolModifiedEntry_Indices_ = boost::multi_index::indexed_by<
     boost::multi_index::ordered_unique<
         modifiedentry_iter,
         CompareCTxMemPoolIter
@@ -115,8 +115,12 @@ struct CTxMemPoolModifiedEntry_Indices final : boost::multi_index::indexed_by<
         boost::multi_index::identity<CTxMemPoolModifiedEntry>,
         CompareTxMemPoolEntryByAncestorFee
     >
->
-{};
+>;
+#if BOOST_VERSION >= 109100
+using CTxMemPoolModifiedEntry_Indices = CTxMemPoolModifiedEntry_Indices_;
+#else
+struct CTxMemPoolModifiedEntry_Indices final : CTxMemPoolModifiedEntry_Indices_{};
+#endif
 
 typedef boost::multi_index_container<
     CTxMemPoolModifiedEntry,
@@ -186,6 +190,10 @@ public:
 
 private:
     const Options m_options;
+    //! Effective weight cap for the block being assembled: nBlockMaxWeight,
+    //! further clamped in CreateNewBlock when RDTS is active for the next
+    //! block (the consensus limit drops to REDUCED_DATA_MAX_BLOCK_WEIGHT).
+    size_t m_effective_max_weight;
 
     // utility functions
     /** Clear the block's state and prepare for assembling a new block */

@@ -2,6 +2,7 @@
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
+#include <common/sighash_rules.h>
 #include <psbt.h>
 
 #include <node/types.h>
@@ -41,6 +42,7 @@ bool PartiallySignedTransaction::Merge(const PartiallySignedTransaction& psbt)
             m_xpubs[xpub_pair.first].insert(xpub_pair.second.begin(), xpub_pair.second.end());
         }
     }
+    m_proprietary.insert(psbt.m_proprietary.begin(), psbt.m_proprietary.end());
     unknown.insert(psbt.unknown.begin(), psbt.unknown.end());
 
     return true;
@@ -208,6 +210,7 @@ void PSBTInput::Merge(const PSBTInput& input)
     hash160_preimages.insert(input.hash160_preimages.begin(), input.hash160_preimages.end());
     hash256_preimages.insert(input.hash256_preimages.begin(), input.hash256_preimages.end());
     hd_keypaths.insert(input.hd_keypaths.begin(), input.hd_keypaths.end());
+    m_proprietary.insert(input.m_proprietary.begin(), input.m_proprietary.end());
     unknown.insert(input.unknown.begin(), input.unknown.end());
     m_tap_script_sigs.insert(input.m_tap_script_sigs.begin(), input.m_tap_script_sigs.end());
     m_tap_scripts.insert(input.m_tap_scripts.begin(), input.m_tap_scripts.end());
@@ -281,6 +284,7 @@ bool PSBTOutput::IsNull() const
 void PSBTOutput::Merge(const PSBTOutput& output)
 {
     hd_keypaths.insert(output.hd_keypaths.begin(), output.hd_keypaths.end());
+    m_proprietary.insert(output.m_proprietary.begin(), output.m_proprietary.end());
     unknown.insert(output.unknown.begin(), output.unknown.end());
     m_tap_bip32_paths.insert(output.m_tap_bip32_paths.begin(), output.m_tap_bip32_paths.end());
 
@@ -318,7 +322,8 @@ bool PSBTInputSignedAndVerified(const PartiallySignedTransaction psbt, unsigned 
     }
 
     if (txdata) {
-        return VerifyScript(input.final_script_sig, utxo.scriptPubKey, &input.final_script_witness, STANDARD_SCRIPT_VERIFY_FLAGS, MutableTransactionSignatureChecker{&(*psbt.tx), input_index, utxo.nValue, *txdata, MissingDataBehavior::FAIL});
+        const unsigned int flags{STANDARD_SCRIPT_VERIFY_FLAGS | (SighashRulesForVerifying() == SighashRules::UNIFIED ? uint32_t{SCRIPT_VERIFY_UNIFIED_SIGHASH} : uint32_t{0})};
+        return VerifyScript(input.final_script_sig, utxo.scriptPubKey, &input.final_script_witness, flags, MutableTransactionSignatureChecker{&(*psbt.tx), input_index, utxo.nValue, *txdata, MissingDataBehavior::FAIL});
     } else {
         return VerifyScript(input.final_script_sig, utxo.scriptPubKey, &input.final_script_witness, STANDARD_SCRIPT_VERIFY_FLAGS, MutableTransactionSignatureChecker{&(*psbt.tx), input_index, utxo.nValue, MissingDataBehavior::FAIL});
     }
@@ -374,6 +379,7 @@ PrecomputedTransactionData PrecomputePSBTData(const PartiallySignedTransaction& 
 
 bool SignPSBTInput(const SigningProvider& provider, PartiallySignedTransaction& psbt, int index, const PrecomputedTransactionData* txdata, int sighash,  SignatureData* out_sigdata, bool finalize)
 {
+    const SighashRules sighash_rules{SighashRulesForSigning()};
     PSBTInput& input = psbt.inputs.at(index);
     const CMutableTransaction& tx = *psbt.tx;
 
@@ -411,11 +417,23 @@ bool SignPSBTInput(const SigningProvider& provider, PartiallySignedTransaction& 
     }
 
     sigdata.witness = false;
+    // Counted before signing so the check below can tell what this call added
+    // from what the PSBT already carried: FillSignatureData copies existing
+    // partial signatures into sigdata, and taproot signatures live in their own
+    // fields rather than in `signatures`.
+    const size_t sigs_before{sigdata.signatures.size() + sigdata.taproot_script_sigs.size()
+                             + (sigdata.taproot_key_path_sig.empty() ? 0 : 1)};
     bool sig_complete;
     if (txdata == nullptr) {
-        sig_complete = ProduceSignature(provider, DUMMY_SIGNATURE_CREATOR, utxo.scriptPubKey, sigdata);
+        // Size estimation only. Pick the creator whose taproot signature is the
+        // length the real one will be, or the estimate is short by a byte per input.
+        const BaseSignatureCreator& dummy{sighash_rules == SighashRules::UNIFIED
+                                              ? DUMMY_UNIFIED_SIGNATURE_CREATOR
+                                              : DUMMY_SIGNATURE_CREATOR};
+        sig_complete = ProduceSignature(provider, dummy, utxo.scriptPubKey, sigdata);
     } else {
         MutableTransactionSignatureCreator creator(tx, index, utxo.nValue, txdata, sighash);
+        creator.SetSighashRules(sighash_rules);
         sig_complete = ProduceSignature(provider, creator, utxo.scriptPubKey, sigdata);
     }
     // Verify that a witness signature was produced in case one was required.
@@ -423,6 +441,21 @@ bool SignPSBTInput(const SigningProvider& provider, PartiallySignedTransaction& 
 
     // If we are not finalizing, set sigdata.complete to false to not set the scriptWitness
     if (!finalize && sigdata.complete) sigdata.complete = false;
+
+    // The creator adds the opt-in bit to the type it signs with, so the declared
+    // type has to move with it, or the input advertises a type its own signature
+    // does not use and any signer or finalizer that enforces the field rejects
+    // it. Only when this call actually produced a signature: a finalizer or an
+    // update pass holds no key, and rewriting a type it did not sign for would
+    // lock out a co-signer that declared something else. SIGHASH_DEFAULT cannot
+    // carry the bit, so it becomes the explicit type that means the same thing,
+    // matching what the creator does.
+    const size_t sigs_after{sigdata.signatures.size() + sigdata.taproot_script_sigs.size()
+                            + (sigdata.taproot_key_path_sig.empty() ? 0 : 1)};
+    if (sighash_rules == SighashRules::UNIFIED && txdata != nullptr && sigs_after > sigs_before) {
+        const int declared{sighash == SIGHASH_DEFAULT ? SIGHASH_ALL : sighash};
+        input.sighash_type = declared | SIGHASH_UNIFIED;
+    }
 
     input.FromSignatureData(sigdata);
 

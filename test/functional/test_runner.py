@@ -94,6 +94,8 @@ BASE_SCRIPTS = [
     # Longest test should go first, to favor running tests in parallel
     # vv Tests less than 5m vv
     'feature_fee_estimation.py',
+    'feature_unified_sighash.py --descriptors',
+    'rpc_combinerawtransaction_unified.py --descriptors',
     'feature_taproot.py',
     'feature_reduced_data_temporary_deployment.py',
     'feature_bip9_max_activation_height.py',
@@ -154,6 +156,7 @@ BASE_SCRIPTS = [
     'p2p_feefilter.py',
     'feature_csv_activation.py',
     'feature_reduced_data_utxo_height.py',
+    'feature_rdts_migration.py',
     'p2p_sendheaders.py',
     'feature_config_args.py',
     'wallet_listtransactions.py --legacy-wallet',
@@ -412,6 +415,7 @@ BASE_SCRIPTS = [
     'rpc_scanblocks.py',
     'p2p_sendtxrcncl.py',
     'rpc_scantxoutset.py',
+    'feature_torcontrol.py',
     'feature_unsupported_utxo_db.py',
     'feature_logging.py',
     'feature_anchors.py',

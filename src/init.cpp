@@ -17,6 +17,7 @@
 #include <chainparamsbase.h>
 #include <clientversion.h>
 #include <common/args.h>
+#include <common/sighash_rules.h>
 #include <common/pcp.h>
 #include <common/system.h>
 #include <consensus/amount.h>
@@ -35,8 +36,8 @@
 #include <interfaces/ipc.h>
 #include <interfaces/mining.h>
 #include <interfaces/node.h>
+#include <ipc/exception.h>
 #include <kernel/caches.h>
-#include <kernel/chainparams.h>
 #include <kernel/context.h>
 #include <kernel/warning.h>
 #include <key.h>
@@ -50,6 +51,7 @@
 #include <node/blockmanager_args.h>
 #include <node/blockstorage.h>
 #include <node/caches.h>
+#include <node/dbcache.h>
 #include <node/chainstate.h>
 #include <node/chainstatemanager_args.h>
 #include <node/context.h>
@@ -314,6 +316,14 @@ void Shutdown(NodeContext& node)
     for (const auto& client : node.chain_clients) {
         client->flush();
     }
+    for (auto& client : node.chain_clients) {
+        try {
+            client->stop();
+        } catch (const ipc::Exception& e) {
+            LogDebug(BCLog::IPC, "Chain client did not disconnect cleanly: %s", e.what());
+            client.reset();
+        }
+    }
     StopMapPort();
 
     // Because these depend on each-other, we make sure that neither can be
@@ -385,9 +395,6 @@ void Shutdown(NodeContext& node)
                 chainstate->ResetCoinsViews();
             }
         }
-    }
-    for (const auto& client : node.chain_clients) {
-        client->stop();
     }
 
 #ifdef ENABLE_ZMQ
@@ -495,6 +502,7 @@ void SetupServerArgs(ArgsManager& argsman, bool can_listen_ipc)
                              kernel::DEFAULT_XOR_BLOCKSDIR),
                    ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
     argsman.AddArg("-fastprune", "Use smaller block files and lower minimum prune height for testing purposes", ArgsManager::ALLOW_ANY | ArgsManager::DEBUG_ONLY, OptionsCategory::DEBUG_TEST);
+    SetupSighashRulesArgs(argsman);
 #if HAVE_SYSTEM
     argsman.AddArg("-blocknotify=<cmd>", "Execute command when the best block changes (%s in cmd is replaced by block hash)", ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
 #endif
@@ -510,7 +518,7 @@ void SetupServerArgs(ArgsManager& argsman, bool can_listen_ipc)
     argsman.AddArg("-corepolicy", strprintf("Use Bitcoin Core policy defaults (default: %u)", DEFAULT_COREPOLICY), ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
     argsman.AddArg("-datadir=<dir>", "Specify data directory", ArgsManager::ALLOW_ANY | ArgsManager::DISALLOW_NEGATION, OptionsCategory::OPTIONS);
     argsman.AddArg("-dbbatchsize", strprintf("Maximum database write batch size in bytes (default: %u)", nDefaultDbBatchSize), ArgsManager::ALLOW_ANY | ArgsManager::DEBUG_ONLY, OptionsCategory::OPTIONS);
-    argsman.AddArg("-dbcache=<n>", strprintf("Maximum database cache size <n> MiB (minimum %d, default: %d). Make sure you have enough RAM. In addition, unused memory allocated to the mempool is shared with this cache (see -maxmempool).", MIN_DB_CACHE >> 20, DEFAULT_DB_CACHE >> 20), ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
+    argsman.AddArg("-dbcache=<n>", strprintf("Maximum database cache size <n> MiB (minimum %s, default is platform dependent, between %s and %s). Make sure you have enough RAM. In addition, unused memory allocated to the mempool is shared with this cache (see -maxmempool).", MIN_DBCACHE_BYTES / 1_MiB, MIN_DEFAULT_DBCACHE / 1_MiB, MAX_DEFAULT_DBCACHE / 1_MiB), ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
     argsman.AddArg("-dbfilesize",
                    strprintf("Target size of files within databases, in MiB (%u to %u, default: %u).",
                              1, 1024,
@@ -534,7 +542,7 @@ void SetupServerArgs(ArgsManager& argsman, bool can_listen_ipc)
                    ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
     argsman.AddArg("-pid=<file>", strprintf("Specify pid file. Relative paths will be prefixed by a net-specific datadir location. (default: %s)", BITCOIN_PID_FILENAME), ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
     argsman.AddArg("-prune=<n>", strprintf("Reduce storage requirements by enabling pruning (deleting) of old blocks. This allows the pruneblockchain RPC to be called to delete specific blocks and enables automatic pruning of old blocks if a target size in MiB is provided. This mode is incompatible with -txindex. "
-            "Warning: Reverting this setting requires re-downloading the entire blockchain. "
+            "Warning: Reverting this setting requires re-downloading the entire blockchain. Wallets and indexes should be loaded at startup and kept active while pruning is enabled so they stay synchronized before old block data is deleted; wallets or indexes that fall behind pruned data may require a reindex. "
             "(default: 0 = disable pruning blocks, 1 = allow manual pruning via RPC, >=%u = automatically prune block files to stay under the specified target size in MiB)", MIN_DISK_SPACE_FOR_BLOCK_FILES / 1024 / 1024), ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
     argsman.AddArg("-pruneduringinit=<n>", "Temporarily adjusts the -prune setting until initial sync completes."
         " Ignored if pruning is disabled."
@@ -696,8 +704,7 @@ void SetupServerArgs(ArgsManager& argsman, bool can_listen_ipc)
     argsman.AddArg("-uaspoof=<ua>", strprintf("Replace entire user agent string with custom identifier (should be formatted '%s' as specified in BIP 14)", BIP14_EXAMPLE_UA), ArgsManager::ALLOW_ANY | ArgsManager::DEBUG_ONLY, OptionsCategory::CONNECTION);
 
     SetupChainParamsBaseOptions(argsman);
-    argsman.AddArg("-consensusrules=<rules>", strprintf("Enforce the specified consensus rules (default: none). Must be %s to use this software.", CONSENSUSRULES_REQUIRED), ArgsManager::ALLOW_ANY, OptionsCategory::CHAINPARAMS);
-    argsman.AddArg("-rdts_consent_flag=<n>", strprintf("Test RDTS consent flag <n> (default: %u)", static_cast<int64_t>(g_rdts_consent)), ArgsManager::ALLOW_ANY | ArgsManager::DEBUG_ONLY, OptionsCategory::DEBUG_TEST);
+    argsman.AddArg("-consensusrules=<rules>", "Enforce the specified consensus rules (default: none).", ArgsManager::ALLOW_ANY, OptionsCategory::CHAINPARAMS);
 
     argsman.AddArg("-acceptnonstddatacarrier",
                    strprintf("Relay and mine non-OP_RETURN datacarrier injection (default: %u)",
@@ -1211,6 +1218,9 @@ bool AppInitParameterInteraction(const ArgsManager& args)
         if (block_reserved_weight < MINIMUM_BLOCK_RESERVED_WEIGHT) {
             return InitError(strprintf(_("Specified -blockreservedweight (%d) is lower than minimum safety value of (%d)"), block_reserved_weight, MINIMUM_BLOCK_RESERVED_WEIGHT));
         }
+        if (block_reserved_weight > REDUCED_DATA_MAX_BLOCK_WEIGHT) {
+            InitWarning(strprintf(_("Specified -blockreservedweight (%d) exceeds the block weight limit that applies while RDTS is active (%d); block templates will contain no transactions while that limit applies"), block_reserved_weight, REDUCED_DATA_MAX_BLOCK_WEIGHT));
+        }
     }
 
     if (auto parsed = args.GetFixedPointArg("-datacarriercost", 2)) {
@@ -1480,7 +1490,7 @@ static ChainstateLoadResult InitAndLoadChainstate(
     LogPrintf("* Using %.1f MiB for in-memory UTXO set (plus up to %.1f MiB of unused mempool space)\n", cache_sizes.coins * (1.0 / 1024 / 1024), mempool_opts.max_size_bytes * (1.0 / 1024 / 1024));
 
     if (gArgs.IsArgSet("-lowmem")) {
-        g_low_memory_threshold = gArgs.GetIntArg("-lowmem", 0 /* not used */) * 1024 * 1024;
+        g_low_memory_threshold = std::max(int64_t{0}, gArgs.GetIntArg("-lowmem", 0 /* not used */)) * 1024 * 1024;
     }
     if (g_low_memory_threshold > 0) {
         LogPrintf("* Flushing caches if available system memory drops below %s MiB\n", g_low_memory_threshold / 1024 / 1024);
@@ -1579,80 +1589,12 @@ static ChainstateLoadResult InitAndLoadChainstate(
 
 bool UserProtocolRulesCheck()
 {
-    const auto rules_requested{gArgs.GetArgs(CONSENSUSRULES_CONFIG_NAME)};
-    for (const auto& rulesok : rules_requested) {
-        if (rulesok == CONSENSUSRULES_REQUIRED) continue;
-        return InitError(strprintf(_("Unknown rule specified in -%s: %s"), CONSENSUSRULES_CONFIG_NAME, rulesok));
+    for (const auto& rule : gArgs.GetArgs(CONSENSUSRULES_CONFIG_NAME)) {
+        // Accepted and ignored: configurations written while RDTS consent was required still carry it
+        if (rule == "rdts") continue;
+        return InitError(strprintf(_("Unknown rule specified in -%s: %s"), CONSENSUSRULES_CONFIG_NAME, rule));
     }
     return true;
-}
-
-bool UserProtocolRulesConsent()
-{
-    if (g_rdts_consent == RDTSConsentFlag::IMPLICIT) {
-        LogPrintf("User already consented to '%s' consensus rules (at installation)\n", CONSENSUSRULES_REQUIRED);
-        return true;
-    }
-    for (const auto& rulesok : gArgs.GetArgs(CONSENSUSRULES_CONFIG_NAME)) {
-        if (rulesok == CONSENSUSRULES_REQUIRED) {
-            LogPrintf("User already consented to '%s' consensus rules (in config)\n", CONSENSUSRULES_REQUIRED);
-            return true;
-        }
-    }
-
-    bilingual_str msg = strprintf(_(
-        "BIP110/RDTS Network Upgrade\n"
-        "\n"
-        "This version of %s applies the BIP110 (RDTS) network upgrade, "
-        "which fixes critical vulnerabilities in long-standing network design. "
-        "However, you are in control of your own software, and this application asks for explicit confirmation.\n"
-        "\n"
-        "Important: "
-        "Because this upgrade already has broad community support, "
-        "reverting to an older software version does not reject it. "
-        "Running outdated software after any network upgrade only leaves your node vulnerable to displaying fake or fraudulent transactions. "
-        "To effectively reject this upgrade, you need to run alternative software designed to split away from the upgraded network.\n"
-        "\n"
-        "For more information, see: %s"
-    ),
-        CLIENT_NAME,
-        "https://bitcoinknots.org/learn/2026-rdts");
-    const bilingual_str msg_manual_suffix = strprintf(_(
-        "To confirm this upgrade, add to your %s file: %s"
-    ),
-        gArgs.GetPathArg("-conf", BITCOIN_CONF_FILENAME).utf8string(),
-        CONSENSUSRULES_CONFIG_NAME + "=" + CONSENSUSRULES_REQUIRED);
-    const bilingual_str msg_manual = msg + Untranslated("\n\n") + msg_manual_suffix;
-
-    if (!gArgs.GetSettingsPath()) {
-        msg = msg_manual;
-    }
-
-    const bool consent = uiInterface.ThreadSafeQuestion(
-        _("Attention:") + Untranslated(" ") + msg,
-        msg_manual.original
-        , "Attention", CClientUIInterface::MSG_WARNING | CClientUIInterface::BTN_ABORT);
-
-    if (consent) {
-        if (gArgs.GetSettingsPath()) {
-            // Write to settings.json so we don't ask anymore
-            LogPrintf("User interactively consented to '%s' consensus rules (%s)\n", CONSENSUSRULES_REQUIRED, "remembering for next time");
-            gArgs.LockSettings([&](common::Settings& settings) {
-                auto& setting = settings.rw_settings[CONSENSUSRULES_CONFIG_NAME];
-                if (setting.isArray()) {
-                    // Normally, it doesn't make sense to support multiple rulesets, but if the user has done so already, don't lose the current set
-                    setting.push_back(CONSENSUSRULES_REQUIRED);
-                } else {
-                    setting = CONSENSUSRULES_REQUIRED;
-                }
-            });
-            gArgs.WriteSettingsFile();
-        } else {
-            LogPrintf("User interactively consented to '%s' consensus rules (%s)\n", CONSENSUSRULES_REQUIRED, "settings disabled, so can't save");
-        }
-    }
-
-    return consent;
 }
 
 bool AppInitMain(NodeContext& node, interfaces::BlockAndHeaderTipInfo* tip_info)
@@ -1731,32 +1673,6 @@ bool AppInitMain(NodeContext& node, interfaces::BlockAndHeaderTipInfo* tip_info)
 
     if (!UserProtocolRulesCheck()) {
         return false;
-    }
-
-    if (!(chainparams.IsTestChain() || UserProtocolRulesConsent())) {
-        if (g_rdts_consent == RDTSConsentFlag::RUNTIME_CHECK) {
-            return InitError(_("User has not consented to supported protocol rules. Exiting"));
-        } else if (g_rdts_consent == RDTSConsentFlag::UNSUPPORTED_UNSAFE_NO_ENFORCEMENT) {
-            LogError("User has not consented to supported protocol rules. This node will NOT enforce them. Warning every hour.");
-            g_local_services = ServiceFlags(g_local_services & ~NODE_REDUCED_DATA);
-            scheduler.scheduleEvery([]{
-                LogError("RDTS is not enabled. This node is therefore vulnerable to displaying fake or fraudulent transactions.\n");
-                LogError("For more information, see: %s\n", "https://bitcoinknots.org/learn/2026-rdts");
-                LogError("To enable RDTS enforcement and disable this warning, add to %s: %s\n",
-                    gArgs.GetPathArg("-conf", BITCOIN_CONF_FILENAME).utf8string(),
-                    CONSENSUSRULES_CONFIG_NAME + "=" + CONSENSUSRULES_REQUIRED);
-            }, std::chrono::hours{1});
-        } else {
-            LogError("User has not consented to supported protocol rules. This node will STILL enforce them. Warning every hour.");
-            g_rdts_warning = true;
-            scheduler.scheduleEvery([]{
-                LogError("This software applies the BIP110/RDTS network upgrade, which fixes critical vulnerabilities, but explicit user confirmation has not been configured.\n");
-                LogError("For more information, see: %s\n", "https://bitcoinknots.org/learn/2026-rdts");
-                LogError("To confirm this upgrade and dismiss this warning, add to your %s file: %s\n",
-                    gArgs.GetPathArg("-conf", BITCOIN_CONF_FILENAME).utf8string(),
-                    CONSENSUSRULES_CONFIG_NAME + "=" + CONSENSUSRULES_REQUIRED);
-            }, std::chrono::hours{1});
-        }
     }
 
     if (interfaces::Ipc* ipc = node.init->ipc()) {
@@ -2080,6 +1996,11 @@ bool AppInitMain(NodeContext& node, interfaces::BlockAndHeaderTipInfo* tip_info)
     // ********************************************************* Step 7: load block chain
 
     // cache size calculations
+    if (args.GetIntArg("-dbcache")) {
+        node::LogOversizedDbCache(args);
+    } else {
+        node::LogAutoDbCacheSettings();
+    }
     const auto [index_cache_sizes, kernel_cache_sizes] = CalculateCacheSizes(args, g_enabled_filter_types.size());
 
     LogInfo("Cache configuration:");
@@ -2106,6 +2027,37 @@ bool AppInitMain(NodeContext& node, interfaces::BlockAndHeaderTipInfo* tip_info)
         do_reindex_chainstate,
         kernel_cache_sizes,
         args);
+
+    // A data directory advanced by a client that was not enforcing the
+    // BLAKE2b hardfork can contain SHA256d blocks at or above the fork height.
+    // Normal startup does not re-validate inherited history, so correct such
+    // state now: mark the offending blocks invalid and reorganize to the best
+    // valid chain (the BLAKE2b chain, which extends past the last shared
+    // pre-fork block, then outweighs the truncated inherited branch). If the
+    // data needed to rewind has been pruned, report it as a load failure so
+    // the reindex prompt below offers recovery, rather than running on (or
+    // partially rewinding) an invalid chain.
+    //
+    // Skip this on any reindex: both -reindex and -reindex-chainstate reconnect
+    // blocks through ConnectBlock, which re-runs the bad-version-blake2b header
+    // check (it is contextual/volatile) and rejects the offending blocks during
+    // the rebuild, so the correction is redundant. The same holds whenever the
+    // active chain has not been built yet (a coins database with no best block,
+    // reindex or not); the correction itself is a no-op in that state.
+    //
+    // The block index is shared, so the invalid marks apply to any background
+    // (assumeutxo) chainstate too; only the active chainstate is reorganized here.
+    // Safe while every snapshot base stays below the BLAKE2b fork height (as
+    // today); a future snapshot base above it would need re-review.
+    if (status == ChainstateLoadStatus::SUCCESS && !ShutdownRequested(node) &&
+            !do_reindex && !do_reindex_chainstate) {
+        bilingual_str rdts_error;
+        if (!node.chainman->ActiveChainstate().CorrectRdtsInvalidBlocks(rdts_error)) {
+            status = ChainstateLoadStatus::FAILURE;
+            error = rdts_error;
+        }
+    }
+
     if (status == ChainstateLoadStatus::FAILURE && !do_reindex && !ShutdownRequested(node)) {
         // If reindex=auto, directly start the reindex
         bool fAutoReindex = (args.GetArg("-reindex", "0") == "auto");
@@ -2115,7 +2067,7 @@ bool AppInitMain(NodeContext& node, interfaces::BlockAndHeaderTipInfo* tip_info)
             do_retry = HasTestOption(args, "reindex_after_failure_noninteractive_yes") ||
             uiInterface.ThreadSafeQuestion(
             error + Untranslated(".\n\n") + _("Do you want to rebuild the databases now?"),
-            error.original + ".\nPlease restart with -reindex or -reindex-chainstate to recover.",
+            error.original + (args.GetIntArg("-prune", 0) ? ".\nPlease restart with -reindex to recover." : ".\nPlease restart with -reindex or -reindex-chainstate to recover."),
             "", CClientUIInterface::MSG_ERROR | CClientUIInterface::BTN_ABORT);
         } else {
             LogPrintf("Automatically running a reindex.\n");
@@ -2564,6 +2516,8 @@ bool AppInitMain(NodeContext& node, interfaces::BlockAndHeaderTipInfo* tip_info)
         banman->DumpBanlist();
     }, DUMP_BANS_INTERVAL);
 
+    banman->SetScheduler(scheduler);
+
     if (node.peerman) node.peerman->StartScheduledTasks(scheduler);
 
 #if HAVE_SYSTEM
@@ -2586,7 +2540,7 @@ bool StartIndexBackgroundSync(NodeContext& node)
     // starting from that point up to the current tip.
     // indexes_start_block='nullptr' means "start from height 0".
     std::optional<const CBlockIndex*> indexes_start_block;
-    std::string older_index_name;
+    BaseIndex* older_index{nullptr};
     ChainstateManager& chainman = *Assert(node.chainman);
     const Chainstate& chainstate = WITH_LOCK(::cs_main, return chainman.GetChainstateForIndexing());
     const CChain& index_chain = chainstate.m_chain;
@@ -2604,7 +2558,7 @@ bool StartIndexBackgroundSync(NodeContext& node)
 
         if (!indexes_start_block || !pindex || pindex->nHeight < indexes_start_block.value()->nHeight) {
             indexes_start_block = pindex;
-            older_index_name = summary.name;
+            older_index = index;
             if (!pindex) break; // Starting from genesis so no need to look for earlier block.
         }
     };
@@ -2615,7 +2569,9 @@ bool StartIndexBackgroundSync(NodeContext& node)
         const CBlockIndex* start_block = *indexes_start_block;
         if (!start_block) start_block = chainman.ActiveChain().Genesis();
         if (!chainman.m_blockman.CheckBlockDataAvailability(*index_chain.Tip(), *Assert(start_block))) {
-            return InitError(Untranslated(strprintf("%s best block of the index goes beyond pruned data. Please disable the index or reindex (which will download the whole blockchain again)", older_index_name)));
+            return InitError(strprintf(
+                _("Index \"%s\" needs block data that has been pruned.\nRestart with -reindex to rebuild (re-downloading the entire blockchain), or %s to disable."),
+                older_index->GetName(), older_index->GetDisableAction()));
         }
     }
 

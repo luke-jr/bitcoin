@@ -26,6 +26,7 @@ add_executable(test_bitcoin
   blockmanager_tests.cpp
   bloom_tests.cpp
   bswap_tests.cpp
+  caches_tests.cpp
   chainstate_write_tests.cpp
   checkqueue_tests.cpp
   cluster_linearize_tests.cpp
@@ -69,6 +70,7 @@ add_executable(test_bitcoin
   orphanage_tests.cpp
   pcp_tests.cpp
   peerman_tests.cpp
+  psbt_tests.cpp
   pmt_tests.cpp
   policy_fee_tests.cpp
   policyestimator_tests.cpp
@@ -78,6 +80,7 @@ add_executable(test_bitcoin
   raii_event_tests.cpp
   random_tests.cpp
   rbf_tests.cpp
+  rdts_params_tests.cpp
   rest_tests.cpp
   result_tests.cpp
   reverselock_tests.cpp
@@ -100,6 +103,7 @@ add_executable(test_bitcoin
   span_tests.cpp
   streams_tests.cpp
   sync_tests.cpp
+  system_ram_tests.cpp
   system_tests.cpp
   timeoffsets_tests.cpp
   torcontrol_tests.cpp
@@ -136,6 +140,7 @@ target_json_data_sources(test_bitcoin
   data/key_io_invalid.json
   data/key_io_valid.json
   data/script_tests.json
+  data/unified_sighash.json
   data/sighash.json
   data/tx_invalid.json
   data/tx_valid.json

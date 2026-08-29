@@ -209,7 +209,6 @@ mkdir -p "$OUTDIR"
 # CONFIGFLAGS
 CONFIGFLAGS="-DREDUCE_EXPORTS=ON -DBUILD_BENCH=OFF -DBUILD_GUI_TESTS=OFF -DBUILD_FUZZ_BINARY=OFF"
 CONFIGFLAGS="$CONFIGFLAGS -DCMAKE_SKIP_BUILD_RPATH=TRUE"  # check-symbols is fussy about rpath and we don't need it
-CONFIGFLAGS="$CONFIGFLAGS -D RDTS_CONSENT=RUNTIME_WARN"
 
 # CFLAGS
 HOST_CFLAGS="-O2 -g"
@@ -230,6 +229,7 @@ esac
 case "$HOST" in
     *linux*)  HOST_LDFLAGS="-Wl,--as-needed -Wl,--dynamic-linker=$glibc_dynamic_linker -static-libstdc++ -Wl,-O2" ;;
     *mingw*)  HOST_LDFLAGS="-Wl,--no-insert-timestamp" ;;
+    *darwin*) HOST_LDFLAGS="-Wl,--icf=safe" ;;
 esac
 
 mkdir -p "$DISTSRC"

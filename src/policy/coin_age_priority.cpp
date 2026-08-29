@@ -105,14 +105,18 @@ void CTxMemPool::UpdateDependentPriorities(const CTransaction &tx, unsigned int 
 double
 CTxMemPoolEntry::GetPriority(unsigned int currentHeight) const
 {
-    // This will only return accurate results when currentHeight >= the heights
-    // at which all the in-chain inputs of the tx were included in blocks.
-    // Typical usage of GetPriority with chainActive.Height() will ensure this.
-    int heightDiff = currentHeight - cachedHeight;
+    // This will only return accurate results when the difference between
+    // cachedHeight and currentHeight does not cross any blocks where the
+    // inputs of the tx are included.
+    // Typical usage of GetPriority with chainActive.Height() will ensure this,
+    // but it's possible that a reorg leaves unaffected mempool entries with a
+    // higher cachedHeight if and only if the below math is safe.
+    int heightDiff = int(currentHeight) - int(cachedHeight);
     double deltaPriority = ((double)heightDiff*inChainInputValue)/nModSize;
     double dResult = cachedPriority + deltaPriority;
-    if (dResult < 0) // This should only happen if it was called with an invalid height
+    if (dResult < 0) {  // Small floating point rounding can potentially add up
         dResult = 0;
+    }
     return dResult;
 }
 
@@ -150,13 +154,13 @@ bool BlockAssembler::TestForBlock(CTxMemPool::txiter iter)
         // If the block is so close to full that no more txs will fit
         // or if we've tried more than 50 times to fill remaining space
         // then flag that the block is finished
-        if (nBlockWeight > m_options.nBlockMaxWeight - 400 || nBlockSigOpsCost > MAX_BLOCK_SIGOPS_COST - 8 || lastFewTxs > 50) {
+        if (nBlockWeight > m_effective_max_weight - 400 || nBlockSigOpsCost > MAX_BLOCK_SIGOPS_COST - 8 || lastFewTxs > 50) {
              blockFinished = true;
              return false;
         }
         // Once we're within 4000 weight of a full block, only look at 50 more txs
         // to try to fill the remaining space.
-        if (nBlockWeight > m_options.nBlockMaxWeight - 4000) {
+        if (nBlockWeight > m_effective_max_weight - 4000) {
             ++lastFewTxs;
         }
         return false;

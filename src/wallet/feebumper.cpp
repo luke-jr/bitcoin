@@ -2,11 +2,14 @@
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
+#include <common/args.h>
+#include <common/sighash_rules.h>
 #include <common/system.h>
 #include <consensus/validation.h>
 #include <interfaces/chain.h>
 #include <node/types.h>
 #include <policy/fees.h>
+#include <chainparams.h>
 #include <policy/policy.h>
 #include <util/moneystr.h>
 #include <util/rbf.h>
@@ -82,9 +85,10 @@ static feebumper::Result CheckFeeRate(const CWallet& wallet, const CMutableTrans
         reused_inputs.push_back(txin.prevout);
     }
 
-    std::optional<CAmount> combined_bump_fee = wallet.chain().calculateCombinedBumpFee(reused_inputs, newFeerate);
+    const std::optional<CAmount> combined_bump_fee = wallet.chain().calculateCombinedBumpFee(reused_inputs, newFeerate);
     if (!combined_bump_fee.has_value()) {
-        errors.push_back(Untranslated(strprintf("Failed to calculate bump fees, because unconfirmed UTXOs depend on enormous cluster of unconfirmed transactions.")));
+        errors.push_back(Untranslated(strprintf("Failed to calculate bump fees, because unconfirmed UTXOs depend on an enormous cluster of unconfirmed transactions.")));
+        return feebumper::Result::WALLET_ERROR;
     }
     CAmount new_total_fee = newFeerate.GetFee(maxTxSize) + combined_bump_fee.value();
 
@@ -372,7 +376,11 @@ Result CommitTransaction(CWallet& wallet, const uint256& txid, CMutableTransacti
     mapValue_t mapValue = oldWtx.mapValue;
     mapValue["replaces_txid"] = oldWtx.GetHash().ToString();
 
-    wallet.CommitTransaction(tx, std::move(mapValue), oldWtx.vOrderForm);
+    bilingual_str broadcast_err;
+    wallet.CommitTransaction(tx, std::move(mapValue), oldWtx.vOrderForm, &broadcast_err);
+    // bumpfee already reports this vector, so a replacement the node would not
+    // take is said out loud rather than left to the debug log.
+    if (!broadcast_err.empty()) errors.push_back(broadcast_err);
 
     // mark the original tx as bumped
     bumped_txid = tx->GetHash();

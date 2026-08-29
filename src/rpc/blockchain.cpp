@@ -9,6 +9,7 @@
 
 #include <blockfilter.h>
 #include <chain.h>
+#include <common/sighash_rules.h>
 #include <chainparams.h>
 #include <chainparamsbase.h>
 #include <clientversion.h>
@@ -615,7 +616,7 @@ static RPCHelpMan sweepprivkeys()
     // Parse options
     std::set<CScript> needles;
     wallet::CCoinControl coin_control;
-    FillableSigningProvider temp_keystore;
+    FlatSigningProvider temp_keystore;
     CMutableTransaction tx;
     std::string label;
     CAmount total_in = 0;
@@ -631,7 +632,8 @@ static RPCHelpMan sweepprivkeys()
                 CPubKey pubkey = key.GetPubKey();
                 CHECK_NONFATAL(key.VerifyPubKey(pubkey));
 
-                temp_keystore.AddKey(key);
+                temp_keystore.keys[pubkey.GetID()] = key;
+                temp_keystore.pubkeys[pubkey.GetID()] = pubkey;
                 CKeyID address = pubkey.GetID();
                 CScript script = GetScriptForDestination(PKHash(address));
                 if (!script.empty()) {
@@ -640,6 +642,25 @@ static RPCHelpMan sweepprivkeys()
                 script = GetScriptForRawPubKey(pubkey);
                 if (!script.empty()) {
                     needles.insert(script);
+                }
+                if (pubkey.IsCompressed()) {
+                    CScript p2wpkh_script = GetScriptForDestination(WitnessV0KeyHash(pubkey));
+                    if (!p2wpkh_script.empty()) {
+                        needles.insert(p2wpkh_script);
+                    }
+                    script = GetScriptForDestination(ScriptHash(p2wpkh_script));
+                    if (!script.empty()) {
+                        needles.insert(script);
+                        temp_keystore.scripts[CScriptID(p2wpkh_script)] = p2wpkh_script;
+                    }
+                    auto tap_tweak = XOnlyPubKey(pubkey).CreateTapTweak(nullptr);
+                    if (tap_tweak) {
+                        WitnessV1Taproot output_key{tap_tweak->first};
+                        needles.insert(GetScriptForDestination(output_key));
+                        TaprootBuilder builder;
+                        builder.Finalize(XOnlyPubKey(pubkey));
+                        temp_keystore.tr_trees[output_key] = builder;
+                    }
                 }
             }
         } else if (optname == "label") {
@@ -710,10 +731,15 @@ static RPCHelpMan sweepprivkeys()
         if (IsDust(tx.vout[0], pwallet->chain().relayDustFee())) {
             throw JSONRPCError(RPC_VERIFY_REJECTED, "Swept value would be dust");
         }
+        PrecomputedTransactionData txdata;
+        txdata.Init(tx, std::vector<CTxOut>(input_txos.begin(), input_txos.end()), true);
         for (size_t input_index = 0; input_index < tx.vin.size(); ++input_index) {
             const auto& utxo = input_txos[input_index];
             SignatureData sig_data;
-            MutableTransactionSignatureCreator creator(tx, input_index, utxo.nValue, SIGHASH_ALL);
+            MutableTransactionSignatureCreator creator(tx, input_index, utxo.nValue, &txdata, SIGHASH_ALL);
+            // A swept key is the case replay protection matters most for: it is
+            // the one most likely already known to someone else.
+            creator.SetSighashRules(SighashRulesForSigning());
             if (!ProduceSignature(temp_keystore, creator, utxo.scriptPubKey, sig_data)) {
                 throw JSONRPCError(RPC_MISC_ERROR, "Failed to sign");
             }
@@ -886,7 +912,9 @@ static CBlockUndo GetUndoChecked(BlockManager& blockman, const CBlockIndex& bloc
     return blockUndo;
 }
 
-const RPCResult getblock_vin{
+const RPCResult& GetBlockVin()
+{
+    static const RPCResult getblock_vin{
     RPCResult::Type::ARR, "vin", "",
     {
         {RPCResult::Type::OBJ, "", "",
@@ -909,6 +937,8 @@ const RPCResult getblock_vin{
         }},
     }
 };
+    return getblock_vin;
+}
 
 static RPCHelpMan getblock()
 {
@@ -959,7 +989,7 @@ static RPCHelpMan getblock()
                         {RPCResult::Type::OBJ, "", "",
                         {
                             {RPCResult::Type::ELISION, "", "The transactions in the format of the getrawtransaction RPC. Different from verbosity = 1 \"tx\" result"},
-                            {RPCResult::Type::NUM, "fee", "The transaction fee in " + CURRENCY_UNIT + ", omitted if block undo data is not available"},
+                            {RPCResult::Type::NUM, "fee", /*optional=*/true, "The transaction fee in " + CURRENCY_UNIT + ", omitted if block undo data is not available"},
                         }},
                     }},
                 }},
@@ -971,7 +1001,7 @@ static RPCHelpMan getblock()
                     {
                         {RPCResult::Type::OBJ, "", "",
                         {
-                            getblock_vin,
+                            GetBlockVin(),
                         }},
                     }},
                 }},
@@ -1835,10 +1865,11 @@ RPCHelpMan getblockchaininfo()
 
 namespace {
 const std::vector<RPCResult> RPCHelpForDeployment{
-    {RPCResult::Type::STR, "type", "one of \"buried\", \"bip9\""},
-    {RPCResult::Type::NUM, "height", /*optional=*/true, "height of the first block which enforces the rules (only for \"buried\" type, or \"bip9\" type with \"active\" status)"},
+    {RPCResult::Type::STR, "type", "one of \"buried\", \"bip9\", \"flagday\""},
+    {RPCResult::Type::NUM, "height", /*optional=*/true, "height of the first block which enforces the rules (only for \"buried\" and \"flagday\" types, or \"bip9\" type with \"active\" status; for \"flagday\" this is the BLAKE2b hardfork height)"},
     {RPCResult::Type::NUM, "height_end", /*optional=*/true, "height of the last block which enforces the rules (only for \"bip9\" type with \"active\" status and temporary deployments)"},
-    {RPCResult::Type::BOOL, "active", "true if the rules are enforced for the mempool and the next block"},
+    {RPCResult::Type::BOOL, "active", "true if the rules are enforced for the mempool and the next block (the mempool applies the RDTS rules regardless of this flag)"},
+    {RPCResult::Type::NUM_TIME, "expiry_time", /*optional=*/true, "median time past at and after which the rules are no longer enforced (only for \"flagday\" type; a block is past expiry when its parent's median time past has reached this value)"},
     {RPCResult::Type::OBJ, "bip9", /*optional=*/true, "status of bip9 softforks (only for \"bip9\" type)",
     {
         {RPCResult::Type::NUM, "bit", /*optional=*/true, "the bit (0-28) in the block version field used to signal this softfork (only for \"started\" and \"locked_in\" status)"},
@@ -1862,6 +1893,28 @@ const std::vector<RPCResult> RPCHelpForDeployment{
     }},
 };
 
+// RDTS (a flag-day deployment, not a versionbits one): rules apply to every
+// block from the BLAKE2b hardfork height until the parent block's
+// median-time-past reaches RdtsExpiryTime. Reported as-of the queried block,
+// with "active" meaning the next block, like the versionbits entries. Omitted
+// entirely when unscheduled (plain regtest), as NEVER_ACTIVE deployments are.
+void RdtsFlagDayDescPushBack(const CBlockIndex* blockindex, UniValue& softforks, const ChainstateManager& chainman)
+{
+    const Consensus::Params& params{chainman.GetConsensus()};
+    if (params.Blake2bHeight == std::numeric_limits<int>::max() ||
+        params.RdtsExpiryTime == std::numeric_limits<int64_t>::min()) return;
+
+    UniValue rv(UniValue::VOBJ);
+    rv.pushKV("type", "flagday");
+    rv.pushKV("height", params.RdtsActivationHeight());
+    rv.pushKV("expiry_time", params.RdtsExpiryTime);
+    // "active" describes the NEXT block, as the versionbits entries do, so the
+    // queried block is that block's parent and its median-time-past is exactly
+    // the parent median-time-past RdtsActiveAt expects.
+    rv.pushKV("active", params.RdtsActiveAt(blockindex->nHeight + 1, blockindex->GetMedianTimePast()));
+    softforks.pushKV("reduced_data", std::move(rv));
+}
+
 UniValue DeploymentInfo(const CBlockIndex* blockindex, const ChainstateManager& chainman)
 {
     UniValue softforks(UniValue::VOBJ);
@@ -1872,7 +1925,7 @@ UniValue DeploymentInfo(const CBlockIndex* blockindex, const ChainstateManager& 
     SoftForkDescPushBack(blockindex, softforks, chainman, Consensus::DEPLOYMENT_SEGWIT);
     SoftForkDescPushBack(blockindex, softforks, chainman, Consensus::DEPLOYMENT_TESTDUMMY);
     SoftForkDescPushBack(blockindex, softforks, chainman, Consensus::DEPLOYMENT_TAPROOT);
-    SoftForkDescPushBack(blockindex, softforks, chainman, Consensus::DEPLOYMENT_REDUCED_DATA);
+    RdtsFlagDayDescPushBack(blockindex, softforks, chainman);
     return softforks;
 }
 } // anon namespace
@@ -1890,6 +1943,10 @@ RPCHelpMan getdeploymentinfo()
                 {RPCResult::Type::NUM, "height", "requested block height (or tip)"},
                 {RPCResult::Type::OBJ_DYN, "deployments", "", {
                     {RPCResult::Type::OBJ, "xxxx", "name of the deployment", RPCHelpForDeployment}
+                }},
+                {RPCResult::Type::OBJ, "blake2b", /*optional=*/true, "hardfork schedule, present only when one is configured", {
+                    {RPCResult::Type::NUM, "height", "the height the hardfork activates at"},
+                    {RPCResult::Type::BOOL, "active", "whether the hardfork rules apply to the block after this one"},
                 }},
             }
         },
@@ -1915,6 +1972,23 @@ RPCHelpMan getdeploymentinfo()
             deploymentinfo.pushKV("hash", blockindex->GetBlockHash().ToString());
             deploymentinfo.pushKV("height", blockindex->nHeight);
             deploymentinfo.pushKV("deployments", DeploymentInfo(blockindex, chainman));
+
+            // Reported at the top level rather than among the deployments so
+            // an operator can see whether the fork is scheduled and whether it
+            // has taken effect, instead of inferring that from rejected
+            // transactions. Every rule the fork carries activates together, at
+            // the deployment the proof-of-work change uses.
+            const Consensus::Params& consensus{chainman.GetConsensus()};
+            if (consensus.Blake2bHeight != std::numeric_limits<int>::max()) {
+                UniValue hf(UniValue::VOBJ);
+                hf.pushKV("height", consensus.Blake2bHeight);
+                // The block after this one is built on it, so ask whether the
+                // deployment is active after it. Delegated rather than
+                // open-coded so this cannot drift from consensus.
+                hf.pushKV("active", DeploymentActiveAfter(blockindex, chainman,
+                                                          Consensus::DEPLOYMENT_BLAKE2B));
+                deploymentinfo.pushKV("blake2b", std::move(hf));
+            }
             return deploymentinfo;
         },
     };
