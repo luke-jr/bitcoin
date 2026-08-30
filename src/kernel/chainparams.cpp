@@ -118,6 +118,10 @@ public:
         consensus.vDeployments[Consensus::DEPLOYMENT_TAPROOT].min_activation_height = 709632; // Approximately November 12th, 2021
 
         consensus.Blake2bHeight = 961640;
+        {
+            constexpr std::string_view headline = "8-30 NYPost Deride And Conquer";
+            consensus.Blake2bHeadline.assign(headline.begin(), headline.end());
+        }
         consensus.Blake2bTargetShift = 22;
 
         // RDTS: its rules apply to every block from Blake2bHeight (the
@@ -645,6 +649,10 @@ public:
                 consensus.CSVHeight = int{height};
                 break;
             }
+        }
+
+        if (opts.blake2b_headline) {
+            consensus.Blake2bHeadline = *opts.blake2b_headline;
         }
 
         // Optionally schedule the RDTS deployment (see -rdtsexpiry). RDTS
