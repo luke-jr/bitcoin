@@ -224,6 +224,7 @@ public:
                 {908765, uint256{"00000000000000000001b64acb5fe4b40b84092159b6406a6244f46a37fa6c6b"}},
                 {961632, uint256{"0000000000000000000169eb6f811ddbd0daf343af7b62180cdb13e7c78dbc16"}},  // first BIP110 block
                 {961639, uint256{"00000000000000000001bbc439e13f749dca850d32c7a2834165338713027e65"}},  // last SHA256d block
+                {961640, uint256{"0000000000000050c1e5f69672f459293be14f46e5a494e7a8c8541396f18eeb"}},  // first BLAKE2b block
             }
         };
 
