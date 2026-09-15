@@ -131,6 +131,11 @@ public:
         // reaching ACTIVE, and that deployment has been removed.)
         consensus.RdtsExpiryTime = 1819756800; // September 1st, 2027 00:00 UTC
 
+        consensus.CoinbaseMaturityLongStartHeight = 973440;
+        consensus.CoinbaseMaturityLongEnforceHeight = 973440;
+        consensus.CoinbaseMaturityLongReleaseHeight = 979920;
+        consensus.CoinbaseMaturityLong = consensus.CoinbaseMaturityLongReleaseHeight - consensus.CoinbaseMaturityLongStartHeight;
+
         consensus.nMinimumChainWork = uint256{"00000000000000000000000000000000000000013e00277374c9f9eeadc70200"};
         consensus.defaultAssumeValid = uint256{"0000000000000078ed1e20cac1acf78df6d1060c78059fb6331e17141c881fc8"}; // 964264
 
@@ -403,6 +408,11 @@ public:
 
         consensus.Blake2bHeight = 150308;
         consensus.RdtsExpiryTime = 1791903600; // October 13th, 2026 15:00:00 UTC
+
+        consensus.CoinbaseMaturityLongStartHeight = 151406;
+        consensus.CoinbaseMaturityLongEnforceHeight = 151550;
+        consensus.CoinbaseMaturityLongReleaseHeight = 158111;
+        consensus.CoinbaseMaturityLong = consensus.CoinbaseMaturityLongReleaseHeight - consensus.CoinbaseMaturityLongStartHeight;
 
         consensus.nMinimumChainWork = uint256{"0000000000000000000000000000000000000000000001d6dce8651b6094e4c1"};
         consensus.defaultAssumeValid = uint256{"0000000000003ed4f08dbdf6f7d6b271a6bcffce25675cb40aa9fa43179a89f3"}; // 72600
