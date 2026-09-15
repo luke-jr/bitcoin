@@ -581,6 +581,10 @@ public:
         const CBlockIndex* block{chainman().ActiveChain()[height]};
         return block && ((block->nStatus & BLOCK_HAVE_DATA) != 0) && block->nTx > 0;
     }
+    int coinbaseMaturity() override
+    {
+        return chainman().GetConsensus().CoinbaseMaturityLong;
+    }
     bool pruneLockExists(const std::string& name) const override
     {
         LOCK(cs_main);
