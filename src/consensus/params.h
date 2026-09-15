@@ -6,6 +6,7 @@
 #ifndef BITCOIN_CONSENSUS_PARAMS_H
 #define BITCOIN_CONSENSUS_PARAMS_H
 
+#include <consensus/consensus.h>
 #include <uint256.h>
 
 #include <chrono>
@@ -123,6 +124,10 @@ struct Params {
      * behaviour is unchanged on chains that do not set it.
      */
     int64_t RdtsExpiryTime{std::numeric_limits<int64_t>::min()};
+    int CoinbaseMaturityLong{COINBASE_MATURITY};
+    int CoinbaseMaturityLongStartHeight{std::numeric_limits<int>::max()};
+    int CoinbaseMaturityLongEnforceHeight{std::numeric_limits<int>::max()};
+    int CoinbaseMaturityLongReleaseHeight{std::numeric_limits<int>::max()};
     /** Don't warn about unknown BIP 9 activations below this height.
      * This prevents us from warning about the CSV and segwit activations. */
     int MinBIP9WarningHeight;

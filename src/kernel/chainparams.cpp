@@ -665,6 +665,13 @@ public:
             consensus.RdtsExpiryTime = *opts.rdts_expiry_time;
         }
 
+        if (opts.coinbase_maturity_long_start_height) {
+            consensus.CoinbaseMaturityLongStartHeight = *opts.coinbase_maturity_long_start_height;
+            consensus.CoinbaseMaturityLongEnforceHeight = *opts.coinbase_maturity_long_enforce_height;
+            consensus.CoinbaseMaturityLongReleaseHeight = *opts.coinbase_maturity_long_release_height;
+            consensus.CoinbaseMaturityLong = consensus.CoinbaseMaturityLongReleaseHeight - consensus.CoinbaseMaturityLongStartHeight;
+        }
+
         for (const auto& [deployment_pos, version_bits_params] : opts.version_bits_parameters) {
             consensus.vDeployments[deployment_pos].nStartTime = version_bits_params.start_time;
             consensus.vDeployments[deployment_pos].nTimeout = version_bits_params.timeout;
