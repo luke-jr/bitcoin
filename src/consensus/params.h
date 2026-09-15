@@ -128,6 +128,10 @@ struct Params {
     int CoinbaseMaturityLongStartHeight{std::numeric_limits<int>::max()};
     int CoinbaseMaturityLongEnforceHeight{std::numeric_limits<int>::max()};
     int CoinbaseMaturityLongReleaseHeight{std::numeric_limits<int>::max()};
+    bool CoinbaseMaturityLongActiveAt(int height) const
+    {
+        return height >= CoinbaseMaturityLongEnforceHeight && height < CoinbaseMaturityLongReleaseHeight;
+    }
     /** Don't warn about unknown BIP 9 activations below this height.
      * This prevents us from warning about the CSV and segwit activations. */
     int MinBIP9WarningHeight;
