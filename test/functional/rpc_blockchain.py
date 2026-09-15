@@ -11,7 +11,6 @@ Test the following RPCs:
     - gettxoutsetinfo
     - gettxout
     - getblockheader
-    - getdifficulty
     - getnetworkhashps
     - waitforblockheight
     - getblock
@@ -94,7 +93,6 @@ class BlockchainTest(BitcoinTestFramework):
         self._test_gettxoutsetinfo()
         self._test_gettxout()
         self._test_getblockheader()
-        self._test_getdifficulty()
         self._test_getnetworkhashps()
         self._test_stopatheight()
         self._test_waitforblock() # also tests waitfornewblock
@@ -471,13 +469,6 @@ class BlockchainTest(BitcoinTestFramework):
 
         assert 'previousblockhash' not in node.getblockheader(node.getblockhash(0))
         assert 'nextblockhash' not in node.getblockheader(node.getbestblockhash())
-
-    def _test_getdifficulty(self):
-        self.log.info("Test getdifficulty")
-        difficulty = self.nodes[0].getdifficulty()
-        # 1 hash in 2 should be valid, so difficulty should be 1/2**31
-        # binary => decimal => binary math is why we do this check
-        assert abs(difficulty * 2**31 - 1) < 0.0001
 
     def _test_getnetworkhashps(self):
         self.log.info("Test getnetworkhashps")
