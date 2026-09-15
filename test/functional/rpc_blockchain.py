@@ -203,6 +203,8 @@ class BlockchainTest(BitcoinTestFramework):
 
         assert_equal(res['bits'], nbits_str(REGTEST_N_BITS))
         assert_equal(res['target'], target_str(REGTEST_TARGET))
+        assert_equal(res['difficulty'], Decimal('4.656542373906925E-10'))
+        assert 'difficulty_blake2b' not in res
 
     def check_signalling_deploymentinfo_result(self, gdi_result, height, blockhash, status_next):
         assert height >= 144 and height <= 287
@@ -457,7 +459,8 @@ class BlockchainTest(BitcoinTestFramework):
         assert isinstance(header['nonce'], int)
         assert isinstance(header['version'], int)
         assert isinstance(int(header['versionHex'], 16), int)
-        assert isinstance(header['difficulty'], Decimal)
+        assert_equal(header['difficulty'], Decimal('4.656542373906925E-10'))
+        assert 'difficulty_blake2b' not in header
 
         # Test with verbose=False, which should return the header as hex.
         header_hex = node.getblockheader(blockhash=besthash, verbose=False)
