@@ -335,6 +335,7 @@ public:
         }
         return chainman().GetParams().GenesisBlock().GetBlockTime(); // Genesis block's time of current network
     }
+    int coinbaseMaturity() override { return chainman().GetConsensus().CoinbaseMaturityLong; }
     double getVerificationProgress() override
     {
         return chainman().GuessVerificationProgress(WITH_LOCK(chainman().GetMutex(), return chainman().ActiveChain().Tip()));
