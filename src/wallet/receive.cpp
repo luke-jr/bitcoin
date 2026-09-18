@@ -98,7 +98,10 @@ CAmount TxGetChange(const CWallet& wallet, const CTransaction& tx)
 }
 
 static CAmount GetCachableAmount(const CWallet& wallet, const CWalletTx& wtx, CWalletTx::AmountType type, const isminefilter& filter)
+    EXCLUSIVE_LOCKS_REQUIRED(wallet.cs_wallet)
 {
+    AssertLockHeld(wallet.cs_wallet);
+
     auto& amount = wtx.m_amounts[type];
     if (!amount.m_cached[filter]) {
         amount.Set(filter, type == CWalletTx::DEBIT ? wallet.GetDebit(*wtx.tx, filter) : TxGetCredit(wallet, *wtx.tx, filter));
@@ -126,6 +129,8 @@ CAmount CachedTxGetCredit(const CWallet& wallet, const CWalletTx& wtx, const ism
 
 CAmount CachedTxGetDebit(const CWallet& wallet, const CWalletTx& wtx, const isminefilter& filter)
 {
+    AssertLockHeld(wallet.cs_wallet);
+
     if (wtx.tx->vin.empty())
         return 0;
 
@@ -139,6 +144,8 @@ CAmount CachedTxGetDebit(const CWallet& wallet, const CWalletTx& wtx, const ismi
 
 CAmount CachedTxGetChange(const CWallet& wallet, const CWalletTx& wtx)
 {
+    AssertLockHeld(wallet.cs_wallet);
+
     if (wtx.fChangeCached)
         return wtx.nChangeCached;
     wtx.nChangeCached = TxGetChange(wallet, *wtx.tx);
@@ -201,6 +208,8 @@ void CachedTxGetAmounts(const CWallet& wallet, const CWalletTx& wtx,
     listReceived.clear();
     listSent.clear();
 
+    LOCK(wallet.cs_wallet);
+
     // Compute fee:
     CAmount nDebit = CachedTxGetDebit(wallet, wtx, filter);
     if (nDebit > 0) // debit>0 means we signed/sent this transaction
@@ -209,7 +218,6 @@ void CachedTxGetAmounts(const CWallet& wallet, const CWalletTx& wtx,
         nFee = nDebit - nValueOut;
     }
 
-    LOCK(wallet.cs_wallet);
     // Sent/received.
     for (unsigned int i = 0; i < wtx.tx->vout.size(); ++i)
     {
@@ -251,6 +259,8 @@ void CachedTxGetAmounts(const CWallet& wallet, const CWalletTx& wtx,
 
 bool CachedTxIsFromMe(const CWallet& wallet, const CWalletTx& wtx, const isminefilter& filter)
 {
+    AssertLockHeld(wallet.cs_wallet);
+
     return (CachedTxGetDebit(wallet, wtx, filter) > 0);
 }
 
