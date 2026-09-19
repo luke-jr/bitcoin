@@ -13,6 +13,9 @@ from test_framework.blocktools import create_block, create_coinbase
 from test_framework.test_framework import BitcoinTestFramework
 from test_framework.messages import (
     CBlockHeader,
+    CInv,
+    MSG_BLOCK,
+    MSG_WITNESS_FLAG,
     NODE_BLAKE2B,
     NODE_REDUCED_DATA,
     NODE_NETWORK,
@@ -21,7 +24,12 @@ from test_framework.messages import (
     NODE_P2P_V2,
     NODE_WITNESS,
     msg_block,
+    msg_getblocks,
+    msg_getdata,
+    msg_getheaders,
     msg_headers,
+    msg_sendcmpct,
+    msg_sendheaders,
     msg_version,
 )
 from test_framework.p2p import (
@@ -123,7 +131,7 @@ class P2PHandshakeTest(BitcoinTestFramework):
         block_height = node.getblockcount() + 1
         self.restart_node(0, extra_args=[
             "-maxstaleoutbound=2",
-            f"-testactivationheight=blake2b@{block_height + 1}",
+            f"-testactivationheight=blake2b@{block_height + 3}",
             f"-stalepeercommonheight={block_height}",
         ])
 
@@ -153,6 +161,59 @@ class P2PHandshakeTest(BitcoinTestFramework):
         legacy_peer.wait_for_getdata([block.sha256])
         legacy_peer.send_message(msg_block(block))
         self.wait_until(lambda: node.getblockcount() == block_height)
+
+        request = msg_getheaders()
+        request.locator.vHave = [tip_hash]
+        headers_count = legacy_peer.message_count["headers"]
+        legacy_peer.send_message(request)
+        legacy_peer.wait_until(lambda: legacy_peer.message_count["headers"] > headers_count)
+        with p2p_lock:
+            headers = legacy_peer.last_message["headers"].headers
+            assert_equal(len(headers), 1)
+            assert_equal(headers[0].rehash(), block.sha256)
+
+        legacy_peer.send_message(msg_sendheaders())
+        legacy_peer.send_message(msg_sendcmpct(announce=True, version=2))
+        legacy_peer.sync_with_ping()
+        with p2p_lock:
+            announcement_counts = {
+                msg_type: legacy_peer.message_count[msg_type]
+                for msg_type in ["cmpctblock", "headers", "inv"]
+            }
+
+        post_common_hashes = [int(block_hash, 16) for block_hash in self.generate(node, 3)]
+        legacy_peer.sync_with_ping()
+        with p2p_lock:
+            for msg_type, count in announcement_counts.items():
+                assert_equal(legacy_peer.message_count[msg_type], count)
+
+        headers_count = legacy_peer.message_count["headers"]
+        legacy_peer.send_message(request)
+        legacy_peer.wait_until(lambda: legacy_peer.message_count["headers"] > headers_count)
+        with p2p_lock:
+            headers = legacy_peer.last_message["headers"].headers
+            assert_equal(len(headers), 1)
+            assert_equal(headers[0].rehash(), block.sha256)
+
+        getblocks = msg_getblocks()
+        getblocks.locator.vHave = [tip_hash]
+        inv_count = legacy_peer.message_count["inv"]
+        legacy_peer.send_message(getblocks)
+        legacy_peer.wait_until(lambda: legacy_peer.message_count["inv"] > inv_count)
+        with p2p_lock:
+            inv = legacy_peer.last_message["inv"].inv
+            assert_equal(len(inv), 1)
+            assert_equal(inv[0].hash, block.sha256)
+        legacy_peer.wait_for_block(block.sha256)
+
+        with p2p_lock:
+            legacy_peer.last_message.pop("block", None)
+            block_count = legacy_peer.message_count["block"]
+        legacy_peer.send_message(msg_getdata(inv=[CInv(MSG_BLOCK | MSG_WITNESS_FLAG, block_hash) for block_hash in post_common_hashes]))
+        legacy_peer.sync_with_ping()
+        with p2p_lock:
+            assert_equal(legacy_peer.message_count["block"], block_count)
+
         legacy_peer.peer_disconnect()
         legacy_peer.wait_for_disconnect()
 
