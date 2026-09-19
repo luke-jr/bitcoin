@@ -9,8 +9,10 @@ import itertools
 import random
 import time
 
+from test_framework.blocktools import create_block, create_coinbase
 from test_framework.test_framework import BitcoinTestFramework
 from test_framework.messages import (
+    CBlockHeader,
     NODE_BLAKE2B,
     NODE_REDUCED_DATA,
     NODE_NETWORK,
@@ -18,6 +20,8 @@ from test_framework.messages import (
     NODE_NONE,
     NODE_P2P_V2,
     NODE_WITNESS,
+    msg_block,
+    msg_headers,
     msg_version,
 )
 from test_framework.p2p import (
@@ -25,6 +29,7 @@ from test_framework.p2p import (
     P2P_SERVICES,
     P2P_SUBVERSION,
     P2P_VERSION,
+    p2p_lock,
 )
 from test_framework.util import (
     assert_equal,
@@ -44,6 +49,16 @@ BASE_SERVICE_FLAGS_PRUNED = NODE_NETWORK_LIMITED | NODE_WITNESS
 # Full service flags (with the preferential-peering bit NODE_BLAKE2B)
 FULL_SERVICE_FLAGS_FULL = NODE_NETWORK | NODE_WITNESS | NODE_REDUCED_DATA | NODE_BLAKE2B
 FULL_SERVICE_FLAGS_PRUNED = NODE_NETWORK_LIMITED | NODE_WITNESS | NODE_REDUCED_DATA | NODE_BLAKE2B
+
+
+class P2PStartingHeight(P2PInterface):
+    def __init__(self, starting_height):
+        super().__init__()
+        self.starting_height = starting_height
+
+    def peer_connect_send_version(self, services):
+        super().peer_connect_send_version(services)
+        self.on_connection_send_msg.nStartingHeight = self.starting_height
 
 
 class P2PHandshakeTest(BitcoinTestFramework):
@@ -103,6 +118,73 @@ class P2PHandshakeTest(BitcoinTestFramework):
         self.nodes[0].setmocktime(time)
         self.generate(self.nodes[0], 1)
         self.nodes[0].setmocktime(0)
+
+    def test_stale_peer_header_probe(self, node):
+        block_height = node.getblockcount() + 1
+        self.restart_node(0, extra_args=[
+            "-maxstaleoutbound=2",
+            f"-testactivationheight=blake2b@{block_height + 1}",
+            f"-stalepeercommonheight={block_height}",
+        ])
+
+        tip_hash = int(node.getbestblockhash(), 16)
+        tip_time = node.getblockheader(node.getbestblockhash())["time"]
+        block = create_block(hashprev=tip_hash, coinbase=create_coinbase(height=block_height), ntime=tip_time + 1)
+        block.solve()
+        node.submitheader(CBlockHeader(block).serialize().hex())
+        assert_equal(node.getblockcount(), block_height - 1)
+
+        legacy_peer = node.add_outbound_p2p_connection(
+            P2PInterface(),
+            p2p_idx=0,
+            connection_type="outbound-full-relay",
+            services=BASE_SERVICE_FLAGS_FULL,
+            supports_v2_p2p=self.options.v2transport,
+            advertise_v2_p2p=self.options.v2transport,
+        )
+        legacy_peer.wait_until(lambda: "getheaders" in legacy_peer.last_message)
+        with p2p_lock:
+            request = legacy_peer.last_message["getheaders"]
+            assert_equal(request.locator.vHave, [])
+            assert_equal(request.hashstop, block.sha256)
+            assert_equal(legacy_peer.message_count["getheaders"], 1)
+
+        legacy_peer.send_message(msg_headers([block]))
+        legacy_peer.wait_for_getdata([block.sha256])
+        legacy_peer.send_message(msg_block(block))
+        self.wait_until(lambda: node.getblockcount() == block_height)
+        legacy_peer.peer_disconnect()
+        legacy_peer.wait_for_disconnect()
+
+        stalled_height = block_height - 2
+        empty_peer = node.add_outbound_p2p_connection(
+            P2PStartingHeight(stalled_height),
+            p2p_idx=0,
+            connection_type="outbound-full-relay",
+            services=BASE_SERVICE_FLAGS_FULL,
+            supports_v2_p2p=self.options.v2transport,
+            advertise_v2_p2p=self.options.v2transport,
+        )
+        empty_peer.wait_until(lambda: "getheaders" in empty_peer.last_message)
+        with p2p_lock:
+            request = empty_peer.last_message["getheaders"]
+            assert_equal(request.locator.vHave, [])
+            assert_equal(request.hashstop, int(node.getblockhash(stalled_height), 16))
+        empty_peer.send_message(msg_headers())
+        empty_peer.sync_with_ping()
+        with p2p_lock:
+            assert_equal(empty_peer.message_count["getheaders"], 1)
+        empty_peer.peer_disconnect()
+        empty_peer.wait_for_disconnect()
+
+        blake2b_peer = node.add_p2p_connection(P2PInterface(), services=FULL_SERVICE_FLAGS_FULL)
+        blake2b_peer.wait_until(lambda: "getheaders" in blake2b_peer.last_message)
+        with p2p_lock:
+            request = blake2b_peer.last_message["getheaders"]
+            assert request.locator.vHave
+            assert_equal(request.hashstop, 0)
+
+        node.disconnect_p2ps()
 
     def run_test(self):
         node = self.nodes[0]
@@ -167,6 +249,9 @@ class P2PHandshakeTest(BitcoinTestFramework):
 
         self.log.info("Check that peer's announced starting height is remembered")
         self.test_startingheight(node)
+
+        self.log.info("Check that stale peers receive only a bounded common-header probe")
+        self.test_stale_peer_header_probe(node)
 
 
 if __name__ == '__main__':
