@@ -356,6 +356,9 @@ struct Peer {
     /** Whether we've sent this peer a getheaders in response to an inv prior to initial-headers-sync completing */
     bool m_inv_triggered_getheaders_before_sync GUARDED_BY(NetEventsInterface::g_msgproc_mutex){false};
 
+    /** Whether we've requested this stale peer's highest usable header. */
+    bool m_stale_peer_probe_sent GUARDED_BY(NetEventsInterface::g_msgproc_mutex){false};
+
     /** Protects m_getdata_requests **/
     Mutex m_getdata_requests_mutex;
     /** Work queue of items requested by this peer **/
@@ -5545,6 +5548,18 @@ bool PeerManagerImpl::SendMessages(CNode* pto)
         // Start block sync
         if (m_chainman.m_best_header == nullptr) {
             m_chainman.m_best_header = m_chainman.ActiveChain().Tip();
+        }
+
+        if (state.pindexBestKnownBlock == nullptr && !CanServeHeaders(*peer) && CanServeBlocks(*peer) && !pto->IsAddrFetchConn() && !peer->m_stale_peer_probe_sent && m_chainparams.StalePeerCommonHeight() != std::numeric_limits<int>::max() && m_chainman.m_best_header->nHeight >= m_chainparams.StalePeerCommonHeight()) {
+            const int starting_height{peer->m_starting_height.load()};
+            const int common_height{m_chainparams.StalePeerCommonHeight()};
+            const int probe_height{starting_height < 0 ? common_height : std::min(starting_height, common_height)};
+            const CBlockIndex* probe_header{Assert(m_chainman.m_best_header->GetAncestor(probe_height))};
+            if (MaybeSendGetHeaders(*pto, CBlockLocator{}, *peer, probe_header->GetBlockHash())) {
+                peer->m_stale_peer_probe_sent = true;
+                LogDebug(BCLog::NET, "requesting common header %s at height=%d from peer=%d\n",
+                         probe_header->GetBlockHash().ToString(), probe_height, pto->GetId());
+            }
         }
 
         // Determine whether we might try initial headers sync or parallel
