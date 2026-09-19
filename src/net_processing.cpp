@@ -1105,6 +1105,12 @@ static bool CanServeBlocks(const Peer& peer)
     return peer.m_their_services & (NODE_NETWORK|NODE_NETWORK_LIMITED);
 }
 
+/** Whether this peer advertises support for our header chain. */
+static bool CanServeHeaders(const Peer& peer)
+{
+    return peer.m_their_services & NODE_BLAKE2B;
+}
+
 /** Whether this peer can only serve limited recent blocks (e.g. because
  *  it prunes old blocks) */
 static bool IsLimitedPeer(const Peer& peer)
@@ -2682,7 +2688,7 @@ bool PeerManagerImpl::TryLowWorkHeadersSync(Peer& peer, CNode& pfrom, const CBlo
         // Only try to sync with this peer if their headers message was full;
         // otherwise they don't have more headers after this so no point in
         // trying to sync their too-little-work chain.
-        if (headers.size() == m_opts.max_headers_result) {
+        if (headers.size() == m_opts.max_headers_result && CanServeHeaders(peer)) {
             // Note: we could advance to the last header in this set that is
             // known to us, rather than starting at the first header (which we
             // may already have); however this is unlikely to matter much since
@@ -2727,6 +2733,8 @@ bool PeerManagerImpl::IsAncestorOfBestHeaderOrTip(const CBlockIndex* header)
 
 bool PeerManagerImpl::MaybeSendGetHeaders(CNode& pfrom, const CBlockLocator& locator, Peer& peer)
 {
+    if (!CanServeHeaders(peer)) return false;
+
     const auto current_time = NodeClock::now();
 
     // Only allow a new getheaders message to go out if we don't have a recent
@@ -4022,7 +4030,7 @@ void PeerManagerImpl::ProcessMessage(CNode& pfrom, const std::string& msg_type, 
             // our initial peer is unresponsive (but less bandwidth than we'd
             // use if we turned on sync with all peers).
             CNodeState& state{*Assert(State(pfrom.GetId()))};
-            if (state.fSyncStarted || (!peer->m_inv_triggered_getheaders_before_sync && *best_block != m_last_block_inv_triggering_headers_sync)) {
+            if (CanServeHeaders(*peer) && (state.fSyncStarted || (!peer->m_inv_triggered_getheaders_before_sync && *best_block != m_last_block_inv_triggering_headers_sync))) {
                 if (MaybeSendGetHeaders(pfrom, GetLocator(m_chainman.m_best_header), *peer)) {
                     LogDebug(BCLog::NET, "getheaders (%d) %s to peer=%d\n",
                             m_chainman.m_best_header->nHeight, best_block->ToString(),
