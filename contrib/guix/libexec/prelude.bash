@@ -65,7 +65,7 @@ guix_prefetch_temp=
 trap 'test -n "$guix_prefetch_temp" && rm -rf -- "$guix_prefetch_temp"' EXIT
 
 guix-prefetch() {
-    local hash="$1" uri="$2"
+    local hash="$1" uri="$2" filename="${3:-${2##*/}}"
     test -n "$guix_prefetch_temp" || guix_prefetch_temp="$(mktemp)"
     cat > "$guix_prefetch_temp" << EOF
 (use-modules (guix packages)
@@ -80,6 +80,7 @@ guix-prefetch() {
     (source (origin
               (method url-fetch)
               (uri "${uri}")
+              (file-name "${filename}")
               (sha256 (base32 "${hash}"))))
     (build-system trivial-build-system)
     (synopsis "")
