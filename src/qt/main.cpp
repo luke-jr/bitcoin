@@ -9,6 +9,10 @@
 
 #include <QCoreApplication>
 
+#ifdef Q_OS_ANDROID
+#include <qt/androidjit.h>
+#endif
+
 #include <functional>
 #include <string>
 
@@ -21,5 +25,10 @@ const std::function<std::string()> G_TEST_GET_FULL_NAME{};
 
 MAIN_FUNCTION
 {
+#ifdef Q_OS_ANDROID
+    // Honor an effective OS execmem restriction without triggering a denied
+    // allocation. Otherwise preserve Qt's normal JIT behavior and overrides.
+    if (AndroidExecmemBlocked()) qputenv("QT_ENABLE_REGEXP_JIT", "0");
+#endif
     return GuiMain(argc, argv);
 }
