@@ -39,6 +39,7 @@ Building
 The following are developer notes on how to build Bitcoin Knots on your native platform. They are not complete guides, but include notes on the necessary libraries, compile flags, etc.
 
 - [Dependencies](dependencies.md)
+- [Android Build Notes](build-android.md)
 - [macOS Build Notes](build-osx.md)
 - [Unix Build Notes](build-unix.md)
 - [Windows Build Notes](build-windows-msvc.md)
