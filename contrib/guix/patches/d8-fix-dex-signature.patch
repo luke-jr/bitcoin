@@ -1,0 +1,26 @@
+Backport upstream "Fix calculation of dex header signature" by Kevin Sun.
+https://r8.googlesource.com/r8/+/634b3eaec7fc3d8b0a293039011ec889d0d045d1
+
+The original length subtracts the field-ID offset instead of the file-size
+offset, leaving the last 52 bytes outside the SHA-1 calculation.
+
+--- a/AUTHORS
++++ b/AUTHORS
+@@ -3,4 +3,5 @@
+ #
+ #   Name/Organization <email address>
+ 
+ Google Inc.
++Kevin Sun <snxngxng@gmail.com>
+
+--- a/src/main/java/com/android/tools/r8/dex/FileWriter.java
++++ b/src/main/java/com/android/tools/r8/dex/FileWriter.java
+@@ -754,7 +754,7 @@
+     try {
+       MessageDigest md = MessageDigest.getInstance("SHA-1");
+       md.update(dest.asArray(), Constants.FILE_SIZE_OFFSET,
+-          layout.getEndOfFile() - Constants.FIELD_IDS_OFF_OFFSET);
++          layout.getEndOfFile() - Constants.FILE_SIZE_OFFSET);
+       md.digest(dest.asArray(), Constants.SIGNATURE_OFFSET, 20);
+     } catch (Exception e) {
+       throw new RuntimeException(e);
