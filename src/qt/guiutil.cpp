@@ -43,6 +43,7 @@
 #include <QDialog>
 #include <QDoubleValidator>
 #include <QFileDialog>
+#include <QFile>
 #include <QFont>
 #include <QFontDatabase>
 #include <QFontMetrics>
@@ -69,6 +70,13 @@
 #include <QThread>
 #include <QUrlQuery>
 #include <QtGlobal>
+
+#ifdef Q_OS_ANDROID
+#include <QFuture>
+#include <QJniEnvironment>
+#include <QJniObject>
+#include <QtCore/qcoreapplication_platform.h>
+#endif
 
 #include <cassert>
 #include <chrono>
@@ -568,6 +576,32 @@ bool openBitcoinConf()
 {
     fs::path pathConfig = gArgs.GetConfigFilePath();
 
+#ifdef Q_OS_ANDROID
+    const QString path = PathToQString(pathConfig);
+    QFile file(path);
+    if (!file.exists()) {
+        if (!file.open(QIODevice::WriteOnly | QIODevice::NewOnly)) return false;
+        if (!file.setPermissions(QFileDevice::ReadOwner | QFileDevice::WriteOwner)) return false;
+        file.close();
+    }
+    // ACTION_EDIT grants the selected editor write access to this file's content
+    // URI. Run on Android's main thread so normal preferred-app selection works.
+    const int result = QNativeInterface::QAndroidApplication::runOnAndroidMainThread([path]() -> QVariant {
+        const auto context = QNativeInterface::QAndroidApplication::context();
+        const QJniObject filename = QJniObject::fromString(path);
+        const jint status = QJniObject::callStaticMethod<jint>("org/bitcoinknots/qt/ConfigEditor", "open", "(Landroid/content/Context;Ljava/lang/String;)I", context.object(), filename.object<jstring>());
+        QJniEnvironment env;
+        if (env->ExceptionCheck()) {
+            env->ExceptionClear();
+            return 2;
+        }
+        return status;
+    }).result().toInt();
+    if (result == 0) return true;
+    if (result != 1) return false;
+    QMessageBox::warning(QApplication::activeWindow(), QObject::tr("Edit configuration file"), QObject::tr("No compatible application is available to edit the configuration file. Install a text editor that supports editing files, then try again."));
+    return true;
+#else
     /* Create the file */
     std::ofstream configFile{pathConfig, std::ios_base::app};
 
@@ -586,6 +620,7 @@ bool openBitcoinConf()
 #endif
 
     return res;
+#endif // Q_OS_ANDROID
 }
 
 ToolTipToRichTextFilter::ToolTipToRichTextFilter(int _size_threshold, QObject *parent) :
