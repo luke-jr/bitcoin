@@ -415,12 +415,14 @@ if(ANDROID)
     main.cpp
     ../init/bitcoin-qt.cpp
   )
-  math(EXPR android_version_code "${CLIENT_VERSION_MAJOR} * 1000000 + ${CLIENT_VERSION_MINOR} * 10000 + ${CLIENT_VERSION_BUILD} * 100 + ${CLIENT_VERSION_RC}")
+  set(ANDROID_VERSION_CODE "" CACHE STRING "Override the date-based Android release version code")
+  include(AndroidVersionCode)
+  compute_android_version_code(android_version_code "${CLIENT_VERSION_SUFFIX}" "${CLIENT_VERSION_RC}" "${ANDROID_VERSION_CODE}")
   set(android_package_dir "${CMAKE_CURRENT_BINARY_DIR}/android")
   configure_file(android/AndroidManifest.xml "${android_package_dir}/AndroidManifest.xml" COPYONLY)
-  configure_file(android/src/org/bitcoinknots/qt/KnotsActivity.java "${android_package_dir}/src/org/bitcoinknots/qt/KnotsActivity.java" COPYONLY)
   configure_file(android/src/org/bitcoinknots/qt/DeviceConditions.java "${android_package_dir}/src/org/bitcoinknots/qt/DeviceConditions.java" COPYONLY)
   configure_file(android/src/org/bitcoinknots/qt/ConfigEditor.java "${android_package_dir}/src/org/bitcoinknots/qt/ConfigEditor.java" COPYONLY)
+  configure_file(android/src/org/bitcoinknots/qt/KnotsActivity.java "${android_package_dir}/src/org/bitcoinknots/qt/KnotsActivity.java" COPYONLY)
   # Package the application-owned adaptive launcher resources.
   foreach(android_icon_resource IN ITEMS
     drawable/ic_launcher_foreground.xml
