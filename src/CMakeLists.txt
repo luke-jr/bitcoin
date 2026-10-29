@@ -361,6 +361,23 @@ if(BUILD_DAEMON)
   )
   install_binary_component(bitcoind HAS_MANPAGE)
 endif()
+
+if(BUILD_ANDROID_MODULE)
+  add_library(bitcoin_android SHARED
+    android/node.cpp
+    bitcoind.cpp
+    init/bitcoind.cpp
+  )
+  set_target_properties(bitcoin_android PROPERTIES OUTPUT_NAME knots)
+  set_property(TARGET bitcoin_android APPEND PROPERTY LINK_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/android/exports.map")
+  target_link_options(bitcoin_android PRIVATE "LINKER:--version-script,${CMAKE_CURRENT_SOURCE_DIR}/android/exports.map")
+  target_compile_definitions(bitcoin_android PRIVATE BUILD_ANDROID_MODULE)
+  target_link_libraries(bitcoin_android PRIVATE
+    core_interface bitcoin_node $<TARGET_NAME_IF_EXISTS:bitcoin_wallet>
+  )
+  install(TARGETS bitcoin_android LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR})
+  install(FILES android/bitcoin_knots_node.h DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/bitcoinknots)
+endif()
 if(WITH_MULTIPROCESS AND BUILD_DAEMON)
   add_executable(bitcoin-node
     bitcoind.cpp

@@ -15,7 +15,8 @@
 /// Monotonic uptime (not affected by system time changes).
 SteadyClock::duration GetUptime();
 
-void SetupEnvironment();
+/** Set up logging and, for standalone programs, process-wide environment policy. */
+void SetupEnvironment(bool setup_process = true);
 [[nodiscard]] bool SetupNetworking();
 #ifndef WIN32
 std::string ShellEscape(const std::string& arg);

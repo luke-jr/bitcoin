@@ -40,8 +40,10 @@ void InitParameterInteraction(ArgsManager& args);
 /** Initialize bitcoin core: Basic context setup.
  *  @note This can be done before daemonization. Do not call Shutdown() if this function fails.
  *  @pre Parameters should be parsed and config file should be read.
+ *  @param setup_process Install process-wide signal and allocation handlers.
+ *                       Embedding applications retain their own handlers.
  */
-bool AppInitBasicSetup(const ArgsManager& args, std::atomic<int>& exit_status);
+bool AppInitBasicSetup(const ArgsManager& args, std::atomic<int>& exit_status, bool setup_process = true);
 /**
  * Initialization: parameter interaction.
  * @note This can be done before daemonization. Do not call Shutdown() if this function fails.

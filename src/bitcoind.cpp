@@ -5,6 +5,10 @@
 
 #include <bitcoin-build-config.h> // IWYU pragma: keep
 
+#ifdef BUILD_ANDROID_MODULE
+#include <android/node.h>
+#endif
+
 #include <chainparams.h>
 #include <clientversion.h>
 #include <common/args.h>
@@ -35,6 +39,12 @@
 using node::NodeContext;
 
 const TranslateFn G_TRANSLATION_FUN{nullptr};
+
+#ifdef BUILD_ANDROID_MODULE
+static constexpr bool SETUP_PROCESS{false};
+#else
+static constexpr bool SETUP_PROCESS{true};
+#endif
 
 #if HAVE_DECL_FORK
 
@@ -178,7 +188,7 @@ static bool AppInit(NodeContext& node)
         // Set this early so that parameter interactions go to console
         InitLogging(args);
         InitParameterInteraction(args);
-        if (!AppInitBasicSetup(args, node.exit_status)) {
+        if (!AppInitBasicSetup(args, node.exit_status, SETUP_PROCESS)) {
             // InitError will have been called with detailed error, which ends up on console
             return false;
         }
@@ -250,7 +260,11 @@ static bool AppInit(NodeContext& node)
     return fRet;
 }
 
+#ifdef BUILD_ANDROID_MODULE
+int AndroidNodeMain(int argc, char* argv[])
+#else
 MAIN_FUNCTION
+#endif
 {
 #ifdef WIN32
     common::WinCmdLineArgs winArgs;
@@ -264,7 +278,11 @@ MAIN_FUNCTION
         return exit_status;
     }
 
-    SetupEnvironment();
+#ifdef BUILD_ANDROID_MODULE
+    android::NodeContextScope android_context{node};
+#endif
+
+    SetupEnvironment(SETUP_PROCESS);
 
     // Connect bitcoind signal handlers
     noui_connect();
@@ -280,6 +298,13 @@ MAIN_FUNCTION
         InitError(error->message, error->details);
         return EXIT_FAILURE;
     }
+
+#ifdef BUILD_ANDROID_MODULE
+    if (args.GetBoolArg("-daemon", false) || args.GetBoolArg("-daemonwait", false)) {
+        InitError(Untranslated("Daemonization is not supported by the embedded node module."));
+        return EXIT_FAILURE;
+    }
+#endif
 
     // Start application
     if (!AppInit(node) || !Assert(node.shutdown_signal)->wait()) {

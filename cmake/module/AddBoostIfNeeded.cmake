@@ -3,7 +3,7 @@
 # file COPYING or https://opensource.org/license/mit/.
 
 function(add_boost_if_needed)
-  if(BUILD_DAEMON)
+  if(BUILD_DAEMON OR BUILD_ANDROID_MODULE)
   elseif(BUILD_CLI)
   # BUILD_BITCOINCONSENSUS_LIB does NOT require boost
   elseif(BUILD_TX)

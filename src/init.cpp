@@ -1014,24 +1014,28 @@ std::set<BlockFilterType> g_enabled_filter_types;
     std::terminate();
 };
 
-bool AppInitBasicSetup(const ArgsManager& args, std::atomic<int>& exit_status)
+bool AppInitBasicSetup(const ArgsManager& args, std::atomic<int>& exit_status, bool setup_process)
 {
     // ********************************************************* Step 1: setup
 #ifdef _MSC_VER
-    // Turn off Microsoft heap dump noise
-    _CrtSetReportMode(_CRT_WARN, _CRTDBG_MODE_FILE);
-    _CrtSetReportFile(_CRT_WARN, CreateFileA("NUL", GENERIC_WRITE, 0, nullptr, OPEN_EXISTING, 0, 0));
-    // Disable confusing "helpful" text message on abort, Ctrl-C
-    _set_abort_behavior(0, _WRITE_ABORT_MSG | _CALL_REPORTFAULT);
+    if (setup_process) {
+        // Turn off Microsoft heap dump noise
+        _CrtSetReportMode(_CRT_WARN, _CRTDBG_MODE_FILE);
+        _CrtSetReportFile(_CRT_WARN, CreateFileA("NUL", GENERIC_WRITE, 0, nullptr, OPEN_EXISTING, 0, 0));
+        // Disable confusing "helpful" text message on abort, Ctrl-C
+        _set_abort_behavior(0, _WRITE_ABORT_MSG | _CALL_REPORTFAULT);
+    }
 #endif
 #ifdef WIN32
-    // Enable heap terminate-on-corruption
-    HeapSetInformation(nullptr, HeapEnableTerminationOnCorruption, nullptr, 0);
+    if (setup_process) {
+        // Enable heap terminate-on-corruption
+        HeapSetInformation(nullptr, HeapEnableTerminationOnCorruption, nullptr, 0);
+    }
 #endif
     if (!SetupNetworking()) {
         return InitError(Untranslated("Initializing networking failed."));
     }
-
+    if (!setup_process) return true;
 #ifndef WIN32
     // Clean shutdown on SIGTERM
     registerSignalHandler(SIGTERM, HandleSIGTERM);

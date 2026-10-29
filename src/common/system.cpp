@@ -60,8 +60,9 @@ void runCommand(const std::string& strCommand)
 }
 #endif
 
-void SetupEnvironment()
+void SetupEnvironment(bool setup_process)
 {
+    if (!setup_process) return;
 #ifdef HAVE_MALLOPT_ARENA_MAX
     // glibc-specific: On 32-bit systems set the number of arenas to 1.
     // By default, since glibc 2.10, the C library will create up to two heap

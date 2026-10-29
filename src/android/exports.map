@@ -1,0 +1,9 @@
+{
+    global:
+        bitcoin_knots_node_main;
+        bitcoin_knots_node_interrupt;
+        Java_org_bitcoinknots_android_Node_run;
+        Java_org_bitcoinknots_android_Node_stop;
+    local:
+        *;
+};
