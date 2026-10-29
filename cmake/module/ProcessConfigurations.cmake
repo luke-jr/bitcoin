@@ -96,7 +96,13 @@ function(remove_cxx_flag_from_all_configs flag)
     list(FILTER flags EXCLUDE REGEX "${flag}")
     list(JOIN flags " " new_flags)
     set(CMAKE_CXX_FLAGS_${config_uppercase} "${new_flags}" PARENT_SCOPE)
-    set(CMAKE_CXX_FLAGS_${config_uppercase} "${new_flags}"
+    # Toolchains may append to the normal variable on every configure. Keep
+    # those additions out of the cache so they do not accumulate.
+    get_property(cached_flags CACHE CMAKE_CXX_FLAGS_${config_uppercase} PROPERTY VALUE)
+    separate_arguments(cached_flags)
+    list(FILTER cached_flags EXCLUDE REGEX "${flag}")
+    list(JOIN cached_flags " " cached_flags)
+    set(CMAKE_CXX_FLAGS_${config_uppercase} "${cached_flags}"
       CACHE STRING
       "Flags used by the CXX compiler during ${config_uppercase} builds."
       FORCE
@@ -111,7 +117,9 @@ function(replace_cxx_flag_in_config config old_flag new_flag)
   endif()
   string(REGEX REPLACE "(^| )${old_flag}( |$)" "\\1${new_flag}\\2" ${var_name} "${${var_name}}")
   set(${var_name} "${${var_name}}" PARENT_SCOPE)
-  set_property(CACHE ${var_name} PROPERTY VALUE "${${var_name}}")
+  get_property(cached_flags CACHE ${var_name} PROPERTY VALUE)
+  string(REGEX REPLACE "(^| )${old_flag}( |$)" "\\1${new_flag}\\2" cached_flags "${cached_flags}")
+  set_property(CACHE ${var_name} PROPERTY VALUE "${cached_flags}")
 endfunction()
 
 set_default_config(RelWithDebInfo)
