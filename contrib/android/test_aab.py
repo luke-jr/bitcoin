@@ -18,6 +18,8 @@ import shutil
 import shlex
 import struct
 import subprocess
+import sys
+import tarfile
 import tempfile
 import unittest
 import warnings
@@ -54,6 +56,31 @@ def unsigned():
                     'base/dex/classes.dex': b'dex fixture'})
 
 
+def extracted_production_kit(destination):
+    """Copy exactly the helpers selected by the release's kit assembly command.
+
+    Reading the actual command avoids a second independently maintained file
+    list that could conceal a missing transitive dependency in release kits.
+    """
+    script = HERE.parent / 'guix/libexec/build-android.sh'
+    lines = iter(script.read_text(encoding='utf-8').splitlines())
+    for line in lines:
+        if line.strip().startswith('cp --target-directory=codesigning '):
+            command = line.strip()
+            while command.endswith('\\'):
+                command = command[:-1] + next(lines).strip()
+            arguments = shlex.split(command)
+            break
+    else:
+        raise AssertionError('Production signing kit copy command missing')
+    destination.mkdir()
+    for source in arguments[2:]:
+        path = HERE.parents[1] / source
+        if path.parent != HERE or not path.is_file():
+            raise AssertionError(f'Unexpected kit helper input: {source}')
+        shutil.copyfile(path, destination / path.name)
+
+
 def elf():
     data = bytearray(128)
     data[:6] = b'\x7fELF\x02\x01'
@@ -67,6 +94,38 @@ def elf():
 
 
 class AssemblyTests(unittest.TestCase):
+    def test_extracted_kit_python_helper_closure(self):
+        with tempfile.TemporaryDirectory() as directory:
+            kit = Path(directory) / 'kit'
+            extracted_production_kit(kit)
+            (kit / 'unsigned.aab').write_bytes(unsigned())
+            values = signatures.entries(unsigned())
+            values.update({'META-INF/MANIFEST.MF': b'manifest fixture',
+                           'META-INF/KNOTS.SF': b'signature fixture',
+                           'META-INF/KNOTS.RSA': b'block fixture'})
+            (kit / 'raw.aab').write_bytes(archive(values))
+            env = dict(os.environ, SOURCE_DATE_EPOCH=str(EPOCH))
+            for arguments in (
+                ('normalize', 'raw.aab', 'signed.aab'),
+                ('extract', 'unsigned.aab', 'signed.aab', 'signature.json', '--certificate-sha256', 'a1' * 32),
+                ('apply', 'unsigned.aab', 'signature.json', 'reconstructed.aab', '--certificate-sha256', 'a1' * 32),
+            ):
+                subprocess.run([sys.executable, str(kit / 'aab-signatures.py'), *arguments],
+                               cwd=kit, env=env, check=True, capture_output=True)
+            self.assertEqual((kit / 'signed.aab').read_bytes(), (kit / 'reconstructed.aab').read_bytes())
+            # APK's standalone CLI must also load with only the packaged files.
+            subprocess.run([sys.executable, str(kit / 'apk-signatures.py'), '--help'],
+                           cwd=kit, check=True, capture_output=True)
+            # Reproduce the original incomplete-kit defect and prove no source
+            # tree fallback can hide the missing transitive helper.
+            (kit / 'aab.py').unlink()
+            result = subprocess.run([sys.executable, str(kit / 'aab-signatures.py'),
+                                     'normalize', 'raw.aab', 'must-not-exist.aab'],
+                                    cwd=kit, env=env, capture_output=True)
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn(b'aab.py', result.stderr)
+            self.assertFalse((kit / 'must-not-exist.aab').exists())
+
     def test_reproducible_layout_and_no_compiler_inputs(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -226,6 +285,40 @@ class SignatureTests(unittest.TestCase):
                                 env=environment, capture_output=True)
         self.assertNotEqual(result.returncode, 0)
         self.assertFalse(output.exists())
+
+    def test_extracted_kit_real_detached_signing_roundtrip(self):
+        kit = self.root / 'extracted-kit'
+        extracted_production_kit(kit)
+        (kit / 'unsigned').mkdir()
+        source = kit / 'unsigned/fixture.aab'
+        source.write_bytes(self.unsigned)
+        verifier = self.root / 'kit-verifier.sh'
+        verifier.write_text('#!/usr/bin/env bash\nexec ' + shlex.quote(jdk_tool('java'))
+                            + ' -cp ' + shlex.quote(str(self.classes)) + ' AabVerifier "$@"\n')
+        verifier.chmod(0o755)
+        env = dict(os.environ, SOURCE_DATE_EPOCH=str(EPOCH), HOST='aarch64-linux-android',
+                   AAB_VERIFIER=str(verifier), JARSIGNER=jdk_tool('jarsigner'),
+                   PYTHON=sys.executable, KNOTS_ANDROID_KEYSTORE_PASSWORD='fixture-password')
+        env.pop('TAR_OPTIONS', None)
+        env.pop('KNOTS_ANDROID_KEY_PASSWORD', None)
+        pin = self.keys['RSA'][1]
+        subprocess.run(['bash', str(kit / 'aab-detached-sig-create.sh'),
+                        str(self.root / 'RSA.p12'), 'fixture', pin],
+                       cwd=kit, env=env, check=True, capture_output=True)
+        signature_tar = kit / 'signature-android-aab-aarch64-linux-android.tar.gz'
+        with tarfile.open(signature_tar) as archive:
+            name = 'android/aarch64-linux-android/fixture.aab.json'
+            payload = kit / 'fixture.json'
+            payload.write_bytes(archive.extractfile(name).read())
+        output = kit / 'reconstructed.aab'
+        subprocess.run(['bash', str(kit / 'aab-apply-sigs.sh'), str(source),
+                        str(payload), str(output), pin], cwd=kit, env=env,
+                       check=True, capture_output=True)
+        # JAR signing metadata may contain a new signing time. Reapplication
+        # must reproduce this signing session's exact recorded output digest.
+        self.assertEqual(hashlib.sha256(output.read_bytes()).hexdigest(),
+                         json.loads(payload.read_text())['signed_sha256'])
+        self.verify(output.read_bytes(), pin)
 
 
 if __name__ == '__main__':

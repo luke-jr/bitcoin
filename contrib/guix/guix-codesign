@@ -31,6 +31,11 @@ Synopsis:
     env DETACHED_SIGS_REPO=<path/to/bitcoin-detached-sigs> \\
       ./contrib/guix/guix-codesign
 
+For HOSTS=aarch64-linux-android, also set ANDROID_RELEASE_CERTIFICATE_SHA256
+to the independently verified APK signing certificate's SHA-256 digest.
+For a separate Play upload key, set ANDROID_UPLOAD_CERTIFICATE_SHA256 too;
+it defaults to the APK certificate.
+
 EOF
 }
 
@@ -99,6 +104,17 @@ fi
 # Default to building for all supported HOSTs (overridable by environment)
 export HOSTS="${HOSTS:-x86_64-apple-darwin arm64-apple-darwin}"
 
+for host in $HOSTS; do
+    if [[ "$host" == aarch64-linux-android && ! "${ANDROID_RELEASE_CERTIFICATE_SHA256:-}" =~ ^[[:xdigit:]]{64}$ ]]; then
+        echo "ERR: Android codesigning requires ANDROID_RELEASE_CERTIFICATE_SHA256 (64 hex digits)." >&2
+        exit 1
+    fi
+    if [[ "$host" == aarch64-linux-android && -n "${ANDROID_UPLOAD_CERTIFICATE_SHA256:-}" && ! "$ANDROID_UPLOAD_CERTIFICATE_SHA256" =~ ^[[:xdigit:]]{64}$ ]]; then
+        echo "ERR: ANDROID_UPLOAD_CERTIFICATE_SHA256 must contain 64 hex digits." >&2
+        exit 1
+    fi
+done
+
 # Usage: distsrc_for_host HOST
 #
 #   HOST: The current platform triple we're building for
@@ -157,6 +173,9 @@ outdir_for_host() {
 
 codesigning_tarball_for_host() {
     case "$1" in
+        aarch64-linux-android)
+            echo "$(outdir_for_host "$1")/${DISTNAME}-${1}-codesigning.tar.gz"
+            ;;
         *mingw*)
             echo "$(outdir_for_host "$1")/${DISTNAME}-win64-codesigning.tar.gz"
             ;;
@@ -273,6 +292,9 @@ for host in $HOSTS; do
         # Required for 'contrib/guix/manifest.scm' to output the right manifest
         # for the particular $HOST we're building for
         export HOST="$host"
+        # The manifest needs only signature verification tools in this stage,
+        # rather than the Android cross compiler and SDK build closure.
+        export GUIX_BUILD_MODE=codesign
 
         # shellcheck disable=SC2030
 cat << EOF
@@ -349,7 +371,8 @@ EOF
         #    more information.
         #
         # shellcheck disable=SC2086,SC2031
-        time-machine shell --manifest="${PWD}/contrib/guix/manifest.scm" \
+        time-machine shell --load-path="${PWD}/contrib/guix/modules" \
+                                 --manifest="${PWD}/contrib/guix/manifest.scm" \
                                  --container \
                                  --pure \
                                  --no-cwd \
@@ -373,6 +396,8 @@ EOF
                                         SOURCE_DATE_EPOCH="${SOURCE_DATE_EPOCH:?unable to determine value}" \
                                         ${V:+V=1} \
                                         ${SOURCES_PATH:+SOURCES_PATH="$SOURCES_PATH"} \
+                                        ${ANDROID_RELEASE_CERTIFICATE_SHA256:+ANDROID_RELEASE_CERTIFICATE_SHA256="$ANDROID_RELEASE_CERTIFICATE_SHA256"} \
+                                        ${ANDROID_UPLOAD_CERTIFICATE_SHA256:+ANDROID_UPLOAD_CERTIFICATE_SHA256="$ANDROID_UPLOAD_CERTIFICATE_SHA256"} \
                                         DISTSRC="$(DISTSRC_BASE=/distsrc-base && distsrc_for_host "$HOST")" \
                                         OUTDIR="$(OUTDIR_BASE=/outdir-base && outdir_for_host "$HOST" codesigned)" \
                                         DIST_ARCHIVE_BASE=/outdir-base/dist-archive \

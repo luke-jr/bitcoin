@@ -72,6 +72,23 @@ mkdir -p "$DISTSRC"
     tar -C codesignatures -xf "$CODESIGNATURE_GIT_ARCHIVE"
 
     case "$HOST" in
+        aarch64-linux-android)
+            : "${ANDROID_RELEASE_CERTIFICATE_SHA256:?not set}"
+            mkdir -p tmp
+            export TMPDIR="$PWD/tmp"
+            apk="${DISTNAME}-${HOST}-unsigned.apk"
+            bash ./apply-sigs.sh \
+                "unsigned/${apk}" \
+                "codesignatures/android/${HOST}/${apk}.json" \
+                "${OUTDIR}/${DISTNAME}-${HOST}.apk" \
+                "$ANDROID_RELEASE_CERTIFICATE_SHA256"
+            bundle="${DISTNAME}-${HOST}-unsigned.aab"
+            bash ./aab-apply-sigs.sh \
+                "unsigned/${bundle}" \
+                "codesignatures/android/${HOST}/${bundle}.json" \
+                "${OUTDIR}/${DISTNAME}-${HOST}.aab" \
+                "${ANDROID_UPLOAD_CERTIFICATE_SHA256:-$ANDROID_RELEASE_CERTIFICATE_SHA256}"
+            ;;
         *mingw*)
             # Apply detached codesignatures
             WORKDIR=".tmp"

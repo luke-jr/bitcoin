@@ -537,7 +537,20 @@ inspecting signatures in Mach-O binaries.")
     (description "Just sponge")
     (license license:gpl2+)))
 
+(define (android-package module name)
+  ;; Keep Android's source toolchain modules out of other platforms and load
+  ;; only the signing tools when reconstructing detached signatures.
+  (module-ref (resolve-interface module) name))
+
 (packages->manifest
+ (if (and (equal? (getenv "HOST") "aarch64-linux-android")
+          (equal? (getenv "GUIX_BUILD_MODE") "codesign"))
+     ;; Applying Android signatures needs Java tools, but no cross compiler or SDK.
+     (let ((jdk (android-package '(gnu packages java) 'openjdk17)))
+       (list bash-minimal coreutils-minimal diffutils findutils grep sed gawk
+             tar gzip git-minimal python-minimal sponge (list jdk "jdk")
+             (android-package '(bitcoin android-signing) 'android-apksigner)
+             (android-package '(bitcoin android-signing) 'android-aab-verifier)))
  (append
   (list ;; The Basics
         bash-minimal
@@ -561,16 +574,21 @@ inspecting signatures in Mach-O binaries.")
         gcc-toolchain-13
         cmake-minimal
         gnu-make
-        pkg-config
-        imagemagick
-        libicns
-        librsvg-2.40
-        ;; Scripting
+        pkg-config)
+  (cond
+   ((not (equal? (getenv "HOST") "aarch64-linux-android"))
+    (list imagemagick libicns librsvg-2.40))
+   ((equal? (getenv "ANDROID_BUILD_MODE") "module") '())
+   ;; The GUI renders its icon and splash PNGs from the existing SVG sources.
+   ;; Android does not generate an ICNS bundle.
+   (else (list imagemagick librsvg-2.40)))
+  (list ;; Scripting
         python-minimal ;; (3.10)
         ;; Git
-        git-minimal
-        ;; Tests
-        python-lief)
+        git-minimal)
+  (if (equal? (getenv "HOST") "aarch64-linux-android")
+      '()
+      (list python-lief))
   (let ((target (getenv "HOST")))
     (cond ((string-suffix? "-mingw32" target)
            (list zip
@@ -578,6 +596,26 @@ inspecting signatures in Mach-O binaries.")
                  nsis-x86_64
                  nss-certs
                  osslsigncode))
+          ((equal? target "aarch64-linux-android")
+           (let ((jdk (android-package '(gnu packages java) 'openjdk17)))
+             (append
+              (list jdk (list jdk "jdk"))
+              (cond
+               ((equal? (getenv "ANDROID_BUILD_MODE") "module")
+                (list (android-package '(bitcoin android) 'android-aarch64-toolchain)))
+               ((or (not (getenv "ANDROID_BUILD_MODE"))
+                    (equal? (getenv "ANDROID_BUILD_MODE") "gui"))
+                (let* ((api (android-package '(bitcoin android-sdk) 'android-api-36))
+                       (provider (android-package '(bitcoin android-fileprovider)
+                                                  'make-android-fileprovider)))
+                  (list (android-package '(bitcoin android) 'android-aarch64-gui-toolchain)
+                        (android-package '(bitcoin android-qt) 'qtbase-android)
+                        api
+                        (android-package '(bitcoin android-framework-res) 'android-framework-res-36)
+                        (android-package '(bitcoin android-aapt2) 'android-aapt2)
+                        (android-package '(bitcoin android-d8) 'android-d8)
+                        (provider (file-append api "/platforms/android-36/android.jar")))))
+               (else (error "ANDROID_BUILD_MODE must be gui or module"))))))
           ((string-contains target "-linux-")
            (list bison
                  (list gcc-toolchain-13 "static")
@@ -588,4 +626,4 @@ inspecting signatures in Mach-O binaries.")
                  (make-lld-wrapper lld-18 #:lld-as-ld? #t)
                  python-signapple
                  zip))
-          (else '())))))
+          (else '()))))))

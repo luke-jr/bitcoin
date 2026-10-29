@@ -36,6 +36,15 @@ Required environment variables as seen inside the container:
     OUTDIR: ${OUTDIR:?not set}
 EOF
 
+# Supply conventional paths used by configure scripts in every target build.
+[ -e /usr/bin ] || mkdir -p /usr/bin
+[ -e /usr/bin/file ] || ln -s --no-dereference "$(command -v file)" /usr/bin/file
+[ -e /usr/bin/env ]  || ln -s --no-dereference "$(command -v env)" /usr/bin/env
+
+if [[ "$HOST" == aarch64-linux-android ]]; then
+    exec bash contrib/guix/libexec/build-android.sh
+fi
+
 ACTUAL_OUTDIR="${OUTDIR}"
 OUTDIR="${DISTSRC}/output"
 
@@ -132,13 +141,6 @@ done
 
 # Disable Guix ld auto-rpath behavior
 export GUIX_LD_WRAPPER_DISABLE_RPATH=yes
-
-# Make /usr/bin if it doesn't exist
-[ -e /usr/bin ] || mkdir -p /usr/bin
-
-# Symlink file and env to a conventional path
-[ -e /usr/bin/file ] || ln -s --no-dereference "$(command -v file)" /usr/bin/file
-[ -e /usr/bin/env ]  || ln -s --no-dereference "$(command -v env)"  /usr/bin/env
 
 # Determine the correct value for -Wl,--dynamic-linker for the current $HOST
 case "$HOST" in
