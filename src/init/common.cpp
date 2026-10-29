@@ -26,7 +26,11 @@ using util::SplitString;
 namespace init {
 void AddLoggingArgs(ArgsManager& argsman)
 {
+#ifdef __ANDROID__
+    argsman.AddArg("-debuglogfile=<file>", strprintf("Enable logging to a file (disabled by default on Android; logs are sent to logcat with tag BitcoinKnots). Relative paths will be prefixed by a net-specific datadir location. The default filename is %s. Pass -nodebuglogfile to disable writing the log to a file.", DEFAULT_DEBUGLOGFILE), ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
+#else
     argsman.AddArg("-debuglogfile=<file>", strprintf("Specify location of debug log file (default: %s). Relative paths will be prefixed by a net-specific datadir location. Pass -nodebuglogfile to disable writing the log to a file.", DEFAULT_DEBUGLOGFILE), ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
+#endif
     argsman.AddArg("-debug=<category>", "Output debug and trace logging (default: -nodebug, supplying <category> is optional). "
         "If <category> is not supplied or if <category> is 1 or \"all\", output all debug logging. If <category> is 0 or \"none\", any other categories are ignored. Other valid values for <category> are: " + LogInstance().LogCategoriesString() + ". This option can be specified multiple times to output multiple categories.",
         ArgsManager::ALLOW_ANY, OptionsCategory::DEBUG_TEST);
@@ -39,15 +43,26 @@ void AddLoggingArgs(ArgsManager& argsman)
     argsman.AddArg("-logtimemicros", strprintf("Add microsecond precision to debug timestamps (default: %u)", DEFAULT_LOGTIMEMICROS), ArgsManager::ALLOW_ANY | ArgsManager::DEBUG_ONLY, OptionsCategory::DEBUG_TEST);
     argsman.AddArg("-loglevelalways", strprintf("Always prepend a category and level (default: %u)", DEFAULT_LOGLEVELALWAYS), ArgsManager::ALLOW_ANY, OptionsCategory::DEBUG_TEST);
     argsman.AddArg("-logratelimit", strprintf("Apply rate limiting to unconditional logging to mitigate disk-filling attacks (default: %u)", BCLog::DEFAULT_LOGRATELIMIT), ArgsManager::ALLOW_ANY | ArgsManager::DEBUG_ONLY, OptionsCategory::DEBUG_TEST);
+#ifdef __ANDROID__
+    argsman.AddArg("-printtoconsole", "Send trace/debug info to console (default: 0; logs are sent to logcat with tag BitcoinKnots)", ArgsManager::ALLOW_ANY, OptionsCategory::DEBUG_TEST);
+#else
     argsman.AddArg("-printtoconsole", "Send trace/debug info to console (default: 1 when no -daemon. To disable logging to file, set -nodebuglogfile)", ArgsManager::ALLOW_ANY, OptionsCategory::DEBUG_TEST);
+#endif
     argsman.AddArg("-shrinkdebugfile", "Shrink debug log file on client startup (default: 1 when no -debug)", ArgsManager::ALLOW_ANY, OptionsCategory::DEBUG_TEST);
 }
 
 void SetLoggingOptions(const ArgsManager& args)
 {
+#ifdef __ANDROID__
+    // Apply this default after configuration is loaded; explicit CLI/config
+    // settings can still opt into persistent logging.
+    LogInstance().m_print_to_file = args.IsArgSet("-debuglogfile") && !args.IsArgNegated("-debuglogfile");
+    LogInstance().m_print_to_console = args.GetBoolArg("-printtoconsole", false);
+#else
     LogInstance().m_print_to_file = !args.IsArgNegated("-debuglogfile");
-    LogInstance().m_file_path = AbsPathForConfigVal(args, args.GetPathArg("-debuglogfile", DEFAULT_DEBUGLOGFILE));
     LogInstance().m_print_to_console = args.GetBoolArg("-printtoconsole", !args.GetBoolArg("-daemon", false));
+#endif
+    LogInstance().m_file_path = AbsPathForConfigVal(args, args.GetPathArg("-debuglogfile", DEFAULT_DEBUGLOGFILE));
     LogInstance().m_log_timestamps = args.GetBoolArg("-logtimestamps", DEFAULT_LOGTIMESTAMPS);
     LogInstance().m_log_time_micros = args.GetBoolArg("-logtimemicros", DEFAULT_LOGTIMEMICROS);
     LogInstance().m_log_threadnames = args.GetBoolArg("-logthreadnames", DEFAULT_LOGTHREADNAMES);

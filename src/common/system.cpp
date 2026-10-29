@@ -11,6 +11,11 @@
 #include <util/string.h>
 #include <util/time.h>
 
+#ifdef __ANDROID__
+#include <android/log.h>
+#include <mutex>
+#endif
+
 #ifndef WIN32
 #include <sys/stat.h>
 #include <unistd.h>
@@ -35,6 +40,36 @@
 #include <thread>
 
 using util::ReplaceAll;
+
+#ifdef __ANDROID__
+namespace {
+void LogToAndroid(const std::string& message)
+{
+    // Leave room for logcat's metadata and keep UTF-8 code points intact.
+    constexpr size_t MAX_CHUNK_SIZE{3800};
+    for (size_t offset{0}; offset < message.size();) {
+        size_t end = std::min(offset + MAX_CHUNK_SIZE, message.size());
+        const auto newline = std::find(message.begin() + offset, message.begin() + end, '\n');
+        if (newline != message.begin() + end) end = newline - message.begin() + 1;
+        const size_t chunk_end = end;
+        while (end < message.size() && end > offset &&
+               (static_cast<unsigned char>(message[end]) & 0xc0) == 0x80) {
+            --end;
+        }
+        // Still make progress if a malformed message contains only continuation bytes.
+        if (end == offset) end = chunk_end;
+        __android_log_write(ANDROID_LOG_INFO, "BitcoinKnots", message.substr(offset, end - offset).c_str());
+        offset = end;
+    }
+}
+
+void SetupAndroidLogging()
+{
+    static std::once_flag once;
+    std::call_once(once, [] { LogInstance().PushBackCallback(LogToAndroid); });
+}
+} // namespace
+#endif
 
 #ifndef WIN32
 std::string ShellEscape(const std::string& arg)
@@ -62,6 +97,10 @@ void runCommand(const std::string& strCommand)
 
 void SetupEnvironment(bool setup_process)
 {
+#ifdef __ANDROID__
+    // Register before logging starts so buffered startup messages are mirrored too.
+    SetupAndroidLogging();
+#endif
     if (!setup_process) return;
 #ifdef HAVE_MALLOPT_ARENA_MAX
     // glibc-specific: On 32-bit systems set the number of arenas to 1.
