@@ -407,7 +407,13 @@ void LoadFont(const QString& file_name)
 
 QString getDefaultDataDirectory()
 {
+#ifdef Q_OS_ANDROID
+    // Android apps cannot write to a Unix home directory. Keep node and wallet
+    // files in private app storage, which needs no storage permission.
+    return QStandardPaths::writableLocation(QStandardPaths::AppDataLocation) + "/bitcoin";
+#else
     return PathToQString(GetDefaultDataDir());
+#endif
 }
 
 QString ExtractFirstSuffixFromFilter(const QString& filter)
@@ -813,7 +819,7 @@ bool SetStartOnSystemStartup(bool fAutoStart)
     }
     return true;
 }
-#elif defined(Q_OS_LINUX)
+#elif defined(Q_OS_LINUX) && !defined(Q_OS_ANDROID)
 
 // Follow the Desktop Application Autostart Spec:
 // https://specifications.freedesktop.org/autostart-spec/autostart-spec-latest.html

@@ -55,6 +55,10 @@ endfunction()
 set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTOMOC_MOC_OPTIONS "-p${CMAKE_CURRENT_SOURCE_DIR}")
 set(CMAKE_AUTORCC ON)
+if(ANDROID)
+  # Host rcc may enable zstd even when the Android Qt runtime omits it.
+  set(CMAKE_AUTORCC_OPTIONS --no-zstd)
+endif()
 set(CMAKE_AUTOUIC ON)
 set(CMAKE_AUTOUIC_SEARCH_PATHS forms)
 
@@ -400,12 +404,42 @@ if(qt_lib_type STREQUAL "STATIC_LIBRARY")
   )
 endif()
 
-add_executable(bitcoin-qt
-  main.cpp
-  ../init/bitcoin-qt.cpp
-)
+if(ANDROID)
+  # Qt's Android loader invokes main() from an ABI-specific shared library.
+  # The Qt helper also generates androiddeployqt APK and AAB build targets.
+  qt6_add_executable(bitcoin-qt
+    main.cpp
+    ../init/bitcoin-qt.cpp
+  )
+  math(EXPR android_version_code "${CLIENT_VERSION_MAJOR} * 1000000 + ${CLIENT_VERSION_MINOR} * 10000 + ${CLIENT_VERSION_BUILD} * 100 + ${CLIENT_VERSION_RC}")
+  set(android_package_dir "${CMAKE_CURRENT_BINARY_DIR}/android")
+  configure_file(android/AndroidManifest.xml "${android_package_dir}/AndroidManifest.xml" COPYONLY)
+  # Package the application-owned adaptive launcher resources.
+  foreach(android_icon_resource IN ITEMS
+    drawable/ic_launcher_foreground.xml
+    mipmap-anydpi-v26/ic_launcher.xml
+    values/ic_launcher_colors.xml
+  )
+    configure_file("android/res/${android_icon_resource}"
+      "${android_package_dir}/res/${android_icon_resource}" COPYONLY)
+  endforeach()
+  set_target_properties(bitcoin-qt PROPERTIES
+    QT_ANDROID_PACKAGE_SOURCE_DIR "${android_package_dir}"
+    QT_ANDROID_PACKAGE_NAME "org.bitcoinknots.qt"
+    QT_ANDROID_MIN_SDK_VERSION 28
+    QT_ANDROID_TARGET_SDK_VERSION 36
+    QT_ANDROID_COMPILE_SDK_VERSION 36
+    QT_ANDROID_VERSION_NAME "${CLIENT_VERSION_STRING}"
+    QT_ANDROID_VERSION_CODE "${android_version_code}"
+  )
+else()
+  add_executable(bitcoin-qt
+    main.cpp
+    ../init/bitcoin-qt.cpp
+  )
+endif()
 
-if(NOT CMAKE_SYSTEM_NAME STREQUAL "Darwin")
+if(NOT ANDROID AND NOT CMAKE_SYSTEM_NAME STREQUAL "Darwin")
   add_dependencies(bitcoin-qt generate_ico)
 endif()
 
@@ -415,13 +449,16 @@ if(WIN32)
 endif()
 
 target_link_libraries(bitcoin-qt
-  core_interface
-  bitcoinqt
-  bitcoin_node
+  PRIVATE
+    core_interface
+    bitcoinqt
+    bitcoin_node
 )
 
 import_plugins(bitcoin-qt)
-install_binary_component(bitcoin-qt HAS_MANPAGE)
+if(NOT ANDROID)
+  install_binary_component(bitcoin-qt HAS_MANPAGE)
+endif()
 if(WIN32)
   set_target_properties(bitcoin-qt PROPERTIES WIN32_EXECUTABLE TRUE)
 endif()

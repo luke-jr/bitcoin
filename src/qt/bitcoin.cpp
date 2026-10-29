@@ -522,7 +522,7 @@ int GuiMain(int argc, char* argv[])
     QCoreApplication::setAttribute(Qt::AA_EnableHighDpiScaling);
 #endif
 
-#if defined(QT_QPA_PLATFORM_ANDROID)
+#if defined(Q_OS_ANDROID)
     QApplication::setAttribute(Qt::AA_DontUseNativeMenuBar);
     QApplication::setAttribute(Qt::AA_DontCreateNativeWidgetSiblings);
     QApplication::setAttribute(Qt::AA_DontUseNativeDialogs);
