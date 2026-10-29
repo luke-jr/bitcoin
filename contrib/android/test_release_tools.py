@@ -18,6 +18,7 @@ import stat
 import struct
 import tempfile
 import unittest
+import xml.etree.ElementTree as ET
 import zipfile
 
 
@@ -30,6 +31,7 @@ def load(name, filename):
 
 signatures = load("apk_signatures", "apk-signatures.py")
 canonical_zip = load("apk_zip", "zip.py")
+framework = load("framework_resources", "build-framework-res.py")
 CERTIFICATE = "a1" * 32
 
 
@@ -224,6 +226,49 @@ class ZipTests(unittest.TestCase):
             with self.assertRaises(FileExistsError):
                 canonical_zip.build_archive(source, output, 0)
             self.assertEqual(output.read_bytes(), b"existing")
+
+
+class FrameworkResourceTests(unittest.TestCase):
+    def test_public_ids_use_final_declarations_and_reject_duplicates(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "public.xml"
+            path.write_text('<resources><public type="attr" name="mode" id="0x01010001"/>'
+                            '<staging-public-group-final type="attr" first-id="0x01ff0000">'
+                            '<public name="mode"/></staging-public-group-final></resources>')
+            self.assertEqual(framework.public_resources(path), [(0x01010001, "attr", "mode")])
+            path.write_text('<resources><public type="attr" name="mode" id="0x01010001"/>'
+                            '<public type="attr" name="other" id="0x01010001"/></resources>')
+            with self.assertRaisesRegex(ValueError, "Duplicate"):
+                framework.public_resources(path)
+
+    def test_formats_ranges_symbols_and_empty_style_parents_survive(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            attrs = root / "attrs.xml"
+            attrs.write_text('<resources><declare-styleable name="Example">'
+                             '<attr name="mode" format="integer" min="1">'
+                             '<enum name="one" value="1"/></attr></declare-styleable>'
+                             '<attr name="mode"/></resources>')
+            definitions = framework.attributes([attrs])
+            output = root / "generated"
+            framework.write_inputs([(0x01010001, "attr", "mode"),
+                                    (0x01030001, "style", "Example.MissingParent")], definitions, output)
+            generated = ET.parse(output / "res/values/framework.xml").getroot()
+            self.assertEqual(generated.find("attr").attrib, {"name": "mode", "format": "integer", "min": "1"})
+            self.assertEqual(generated.find("attr/enum").attrib, {"name": "one", "value": "1"})
+            self.assertEqual(generated.find("style").get("parent"), "")
+            attrs.write_text('<resources><attr name="mode"><enum name="one" value="1"/></attr>'
+                             '<attr name="mode"><enum name="one" value="2"/></attr></resources>')
+            with self.assertRaisesRegex(ValueError, "Conflicting"):
+                framework.attributes([attrs])
+
+    def test_compiled_id_validation_rejects_changes_missing_and_extra_entries(self):
+        public = [(0x01010001, "attr", "mode")]
+        valid = "    resource 0x01010001 attr/mode PUBLIC\n"
+        framework.verify_dump(public, valid)
+        for text in ("", valid.replace("01010001", "01010002"), valid + valid):
+            with self.assertRaisesRegex(ValueError, "differ"):
+                framework.verify_dump(public, text)
 
 
 if __name__ == "__main__":
