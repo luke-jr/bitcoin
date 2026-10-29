@@ -48,6 +48,8 @@ public:
         ShowTrayIcon,           // bool
         MinimizeToTray,         // bool
         NetworkPort,            // int
+        PauseOnCellular,        // bool (Android)
+        PauseOnBattery,         // bool (Android)
         MapPortUPnP,            // bool
         MapPortNatpmp,          // bool
         MinimizeOnClose,        // bool
@@ -147,6 +149,8 @@ public:
     bool getShowTrayIcon() const { return m_show_tray_icon; }
     bool getMinimizeToTray() const { return fMinimizeToTray; }
     bool getMinimizeOnClose() const { return fMinimizeOnClose; }
+    bool getPauseOnCellular() const { return getOption(PauseOnCellular).toBool(); }
+    bool getPauseOnBattery() const { return getOption(PauseOnBattery).toBool(); }
     BitcoinUnit getDisplayUnit() const { return m_display_bitcoin_unit; }
     bool getDisplayAddresses() const { return bDisplayAddresses; }
     QString getThirdPartyTxUrls() const { return strThirdPartyTxUrls; }
@@ -207,6 +211,7 @@ private:
     void checkAndMigrate();
 
 Q_SIGNALS:
+    void networkPolicyChanged();
     void displayUnitChanged(BitcoinUnit unit);
     void coinControlFeaturesChanged(bool);
     void addresstypeChanged(OutputType);

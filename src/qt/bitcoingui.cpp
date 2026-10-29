@@ -47,6 +47,7 @@
 #include <util/translation.h>
 #include <validation.h>
 
+#include <algorithm>
 #include <functional>
 
 #include <QAction>
@@ -76,6 +77,7 @@
 #include <QUrlQuery>
 #include <QVBoxLayout>
 #include <QWindow>
+#include <QWidgetAction>
 
 
 const std::string BitcoinGUI::DEFAULT_UIPLATFORM =
@@ -696,7 +698,12 @@ void BitcoinGUI::setClientModel(ClientModel *_clientModel, interfaces::BlockAndH
         // Keep up to date with client
         setNetworkActive(m_node.getNetworkActive());
         connect(connectionsControl, &GUIUtil::ClickableLabel::clicked, [this] {
+            setNetworkActive(m_node.getNetworkActive());
+#ifdef Q_OS_ANDROID
+            GUIUtil::PopupMenuAboveWidget(m_network_context_menu, connectionsControl);
+#else
             GUIUtil::PopupMenu(m_network_context_menu, QCursor::pos());
+#endif
         });
         connect(_clientModel, &ClientModel::numConnectionsChanged, this, &BitcoinGUI::setNumConnections);
         connect(_clientModel, &ClientModel::networkActiveChanged, this, &BitcoinGUI::setNetworkActive);
@@ -1134,6 +1141,7 @@ void BitcoinGUI::updateNetworkState()
     } else {
         //: A substring of the tooltip.
         tooltip = tr("Network activity disabled.");
+        if (!m_network_pause_reason.isEmpty()) tooltip += QLatin1Char(' ') + m_network_pause_reason;
         icon = ":/icons/network_disabled";
     }
 
@@ -1151,10 +1159,29 @@ void BitcoinGUI::setNumConnections(int count)
     updateNetworkState();
 }
 
-void BitcoinGUI::setNetworkActive(bool network_active)
+void BitcoinGUI::setNetworkActive(bool /*network_active*/)
 {
+    // Read current state: independent backend notifications may arrive out of order.
     updateNetworkState();
     m_network_context_menu->clear();
+    if (!m_network_pause_reason.isEmpty()) {
+#ifdef Q_OS_ANDROID
+        // A disabled QAction keeps the entire reason on one line, making the
+        // menu wider than a phone. Give informational text a bounded, wrapping row.
+        auto* reason = new QLabel(m_network_pause_reason, m_network_context_menu);
+        reason->setTextFormat(Qt::PlainText);
+        reason->setWordWrap(true);
+        reason->setMargin(8);
+        reason->setFixedWidth(std::min(320, std::max(1, width() - 48)));
+        reason->setEnabled(false);
+        auto* reason_action = new QWidgetAction(m_network_context_menu);
+        reason_action->setDefaultWidget(reason);
+        reason_action->setEnabled(false);
+        m_network_context_menu->addAction(reason_action);
+#else
+        m_network_context_menu->addAction(m_network_pause_reason)->setEnabled(false);
+#endif
+    }
     m_network_context_menu->addAction(
         //: A context menu item. The "Peers tab" is an element of the "Node window".
         tr("Show Peers tab"),
@@ -1163,12 +1190,24 @@ void BitcoinGUI::setNetworkActive(bool network_active)
             showDebugWindow();
         });
     m_network_context_menu->addAction(
-        network_active ?
+        m_node.getNetworkActive() ?
             //: A context menu item.
             tr("Disable network activity") :
             //: A context menu item. The network activity was disabled previously.
             tr("Enable network activity"),
-        [this, new_state = !network_active] { m_node.setNetworkActive(new_state); });
+        [this, new_state = !m_node.getNetworkActive()] {
+            m_node.setNetworkActive(new_state);
+            // Refresh the normal toggle after a user override.
+            setNetworkActive(m_node.getNetworkActive());
+        });
+}
+
+void BitcoinGUI::setNetworkPauseReason(const QString& reason)
+{
+    m_network_pause_reason = reason;
+    if (clientModel) setNetworkActive(m_node.getNetworkActive());
+    if (!reason.isEmpty()) statusBar()->showMessage(reason);
+    else statusBar()->clearMessage();
 }
 
 void BitcoinGUI::updateHeadersSyncProgressLabel()

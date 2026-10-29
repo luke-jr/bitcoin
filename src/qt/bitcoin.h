@@ -18,6 +18,9 @@
 #include <QApplication>
 
 class BitcoinGUI;
+#ifdef Q_OS_ANDROID
+class AndroidNetworkPolicy;
+#endif
 class ClientModel;
 class NetworkStyle;
 class OptionsModel;
@@ -57,6 +60,9 @@ public:
     void createNode(interfaces::Init& init);
     /// Basic initialization, before starting initialization/shutdown thread. Return true on success.
     bool baseInitialize();
+#ifdef Q_OS_ANDROID
+    void prepareNetworkPolicy();
+#endif
 
     /// Request core initialization
     void requestInitialize();
@@ -104,6 +110,10 @@ private:
     std::unique_ptr<QWidget> shutdownWindow;
     SplashScreen* m_splash = nullptr;
     std::unique_ptr<interfaces::Node> m_node;
+#ifdef Q_OS_ANDROID
+    std::unique_ptr<AndroidNetworkPolicy> m_network_policy;
+    bool m_initial_network_active{true};
+#endif
 
     void startThread();
 };

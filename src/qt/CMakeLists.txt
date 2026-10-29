@@ -406,7 +406,10 @@ endif()
 
 if(ANDROID)
   # Qt's Android loader invokes main() from an ABI-specific shared library.
-  target_sources(bitcoinqt PRIVATE androidwindowchrome.cpp androidwindowchrome.h)
+  target_sources(bitcoinqt PRIVATE
+    androidnetworkpolicy.cpp androidnetworkpolicy.h
+    androidwindowchrome.cpp androidwindowchrome.h
+  )
   # The Qt helper also generates androiddeployqt APK and AAB build targets.
   qt6_add_executable(bitcoin-qt
     main.cpp
@@ -415,6 +418,7 @@ if(ANDROID)
   math(EXPR android_version_code "${CLIENT_VERSION_MAJOR} * 1000000 + ${CLIENT_VERSION_MINOR} * 10000 + ${CLIENT_VERSION_BUILD} * 100 + ${CLIENT_VERSION_RC}")
   set(android_package_dir "${CMAKE_CURRENT_BINARY_DIR}/android")
   configure_file(android/AndroidManifest.xml "${android_package_dir}/AndroidManifest.xml" COPYONLY)
+  configure_file(android/src/org/bitcoinknots/qt/DeviceConditions.java "${android_package_dir}/src/org/bitcoinknots/qt/DeviceConditions.java" COPYONLY)
   configure_file(android/src/org/bitcoinknots/qt/ConfigEditor.java "${android_package_dir}/src/org/bitcoinknots/qt/ConfigEditor.java" COPYONLY)
   # Package the application-owned adaptive launcher resources.
   foreach(android_icon_resource IN ITEMS

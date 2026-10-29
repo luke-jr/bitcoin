@@ -118,6 +118,7 @@ protected:
 
 private:
     interfaces::Node& m_node;
+    QString m_network_pause_reason;
     WalletController* m_wallet_controller{nullptr};
     std::unique_ptr<interfaces::Handler> m_handler_message_box;
     std::unique_ptr<interfaces::Handler> m_handler_question;
@@ -239,6 +240,7 @@ public Q_SLOTS:
     void setNumConnections(int count);
     /** Set network state shown in the UI */
     void setNetworkActive(bool network_active);
+    void setNetworkPauseReason(const QString& reason);
     /** Set number of blocks and last block date shown in the UI */
     void setNumBlocks(int count, const QDateTime& blockDate, double nVerificationProgress, SyncType synctype, SynchronizationState sync_state);
     /** Launch the wallet creation modal (no-op if wallet is not compiled) **/

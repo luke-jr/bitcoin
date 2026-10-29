@@ -383,6 +383,9 @@ namespace GUIUtil
      */
     void PopupMenu(QMenu* menu, const QPoint& point, QAction* at_action = nullptr);
 
+    /** Show a menu above a widget, confined to its window and available screen. */
+    void PopupMenuAboveWidget(QMenu* menu, QWidget* anchor);
+
     /**
      * Returns the start-moment of the day in local time.
      *

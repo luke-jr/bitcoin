@@ -53,6 +53,12 @@
 
 const char *DEFAULT_GUI_PROXY_HOST = "127.0.0.1";
 
+#ifdef Q_OS_ANDROID
+static constexpr bool DEFAULT_PAUSE_NETWORKING = true;
+#else
+static constexpr bool DEFAULT_PAUSE_NETWORKING = false;
+#endif
+
 static QString GetDefaultProxyAddress();
 
 /** Map GUI option ID to node setting name. */
@@ -309,6 +315,13 @@ bool OptionsModel::Init(bilingual_str& error)
     setRestartRequired(false);
 
     // These are Qt-only settings:
+
+#ifdef Q_OS_ANDROID
+    if (!settings.contains("fPauseOnCellular"))
+        settings.setValue("fPauseOnCellular", DEFAULT_PAUSE_NETWORKING);
+    if (!settings.contains("fPauseOnBattery"))
+        settings.setValue("fPauseOnBattery", DEFAULT_PAUSE_NETWORKING);
+#endif
 
     // Window
     if (!settings.contains("fHideTrayIcon")) {
@@ -616,6 +629,10 @@ QVariant OptionsModel::getOption(OptionID option, const std::string& suffix) con
         return fMinimizeToTray;
     case NetworkPort:
         return settings.value("nNetworkPort");
+    case PauseOnCellular:
+        return settings.value("fPauseOnCellular", DEFAULT_PAUSE_NETWORKING).toBool();
+    case PauseOnBattery:
+        return settings.value("fPauseOnBattery", DEFAULT_PAUSE_NETWORKING).toBool();
     case MapPortUPnP:
 #ifdef USE_UPNP
         return SettingToBool(setting(), DEFAULT_UPNP);
@@ -839,6 +856,13 @@ bool OptionsModel::setOption(OptionID option, const QVariant& value, const std::
     case MinimizeToTray:
         fMinimizeToTray = value.toBool();
         settings.setValue("fMinimizeToTray", fMinimizeToTray);
+        break;
+    case PauseOnCellular:
+    case PauseOnBattery:
+        if (changed()) {
+            settings.setValue(option == PauseOnCellular ? "fPauseOnCellular" : "fPauseOnBattery", value.toBool());
+            Q_EMIT networkPolicyChanged();
+        }
         break;
     case NetworkPort:
         if (settings.value("nNetworkPort") != value) {

@@ -65,6 +65,7 @@
 #include <QWindow>
 
 #ifdef Q_OS_ANDROID
+#include <qt/androidnetworkpolicy.h>
 #include <qt/androidwindowchrome.h>
 #endif
 
@@ -241,6 +242,9 @@ void BitcoinApplication::setupPlatformStyle()
 
 BitcoinApplication::~BitcoinApplication()
 {
+#ifdef Q_OS_ANDROID
+    m_network_policy.reset();
+#endif
     m_executor.reset();
 
     delete window;
@@ -347,8 +351,21 @@ void BitcoinApplication::requestInitialize()
     Q_EMIT requestedInitialize();
 }
 
+#ifdef Q_OS_ANDROID
+void BitcoinApplication::prepareNetworkPolicy()
+{
+    m_initial_network_active = gArgs.GetBoolArg("-networkactive", true);
+    m_network_policy = std::make_unique<AndroidNetworkPolicy>(node(), *optionsModel);
+    // Initialize offline until the first device-state callback is available.
+    gArgs.ForceSetArg("-networkactive", "0");
+}
+#endif
+
 void BitcoinApplication::requestShutdown()
 {
+#ifdef Q_OS_ANDROID
+    if (m_network_policy) m_network_policy->stop();
+#endif
     for (const auto w : QGuiApplication::topLevelWindows()) {
         w->hide();
     }
@@ -407,6 +424,12 @@ void BitcoinApplication::initializeResult(bool success, interfaces::BlockAndHead
 
         // Log this only after AppInitMain finishes, as then logging setup is guaranteed complete
         qInfo() << "Platform customization:" << platformStyle->getName();
+#ifdef Q_OS_ANDROID
+        gArgs.ForceSetArg("-networkactive", m_initial_network_active ? "1" : "0");
+        m_network_policy->start(m_initial_network_active);
+        connect(m_network_policy.get(), &AndroidNetworkPolicy::pauseReasonChanged, window, &BitcoinGUI::setNetworkPauseReason);
+        window->setNetworkPauseReason(m_network_policy->pauseReason());
+#endif
         clientModel = new ClientModel(node(), optionsModel, *platformStyle);
         window->setClientModel(clientModel, &tip_info);
 
@@ -702,6 +725,9 @@ int GuiMain(int argc, char* argv[])
 
     try
     {
+#ifdef Q_OS_ANDROID
+        app.prepareNetworkPolicy();
+#endif
         app.createWindow(networkStyle.data());
         // Perform base initialization before spinning up initialization/shutdown thread
         // This is acceptable because this function only contains steps that are quick to execute,

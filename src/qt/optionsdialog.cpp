@@ -270,6 +270,10 @@ OptionsDialog::OptionsDialog(QWidget* parent, bool enableWallet)
     connect(ui->networkPort, SIGNAL(textChanged(const QString&)), this, SLOT(checkLineEdit()));
 
     /* Network elements init */
+#ifndef Q_OS_ANDROID
+    ui->pauseOnCellular->hide();
+    ui->pauseOnBattery->hide();
+#endif
     ui->proxyIp->setEnabled(false);
     ui->proxyPort->setEnabled(false);
     ui->proxyPort->setValidator(new QIntValidator(1, 65535, this));
@@ -878,6 +882,10 @@ void OptionsDialog::setMapper()
     mapper->addMapping(ui->m_enable_psbt_controls, OptionsModel::EnablePSBTControls);
 
     /* Network */
+#ifdef Q_OS_ANDROID
+    mapper->addMapping(ui->pauseOnCellular, OptionsModel::PauseOnCellular);
+    mapper->addMapping(ui->pauseOnBattery, OptionsModel::PauseOnBattery);
+#endif
     mapper->addMapping(ui->networkPort, OptionsModel::NetworkPort);
     mapper->addMapping(upnp, OptionsModel::MapPortUPnP);
     mapper->addMapping(ui->mapPortNatpmp, OptionsModel::MapPortNatpmp);

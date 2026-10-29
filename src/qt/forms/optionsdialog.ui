@@ -347,6 +347,26 @@
       </attribute>
       <layout class="QVBoxLayout" name="verticalLayout_Network">
        <item>
+        <widget class="QCheckBox" name="pauseOnCellular">
+         <property name="toolTip">
+          <string>Automatically disable network activity on cellular, metered, or unknown connections. Use the network icon to enable it again; automatic control resumes when a relevant device condition or preference changes.</string>
+         </property>
+         <property name="text">
+          <string>Pause networking on cellular or metered connections</string>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QCheckBox" name="pauseOnBattery">
+         <property name="toolTip">
+          <string>Automatically disable network activity on battery power or when the power source is unknown. Use the network icon to enable it again; automatic control resumes when a relevant device condition or preference changes.</string>
+         </property>
+         <property name="text">
+          <string>Pause networking while running on battery</string>
+         </property>
+        </widget>
+       </item>
+       <item>
         <layout class="QHBoxLayout" name="horizontalLayout_Network_Port">
          <item>
           <widget class="QLabel" name="networkPortLabel">

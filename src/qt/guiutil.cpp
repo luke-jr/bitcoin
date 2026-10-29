@@ -69,6 +69,7 @@
 #include <QTextDocument> // for Qt::mightBeRichText
 #include <QThread>
 #include <QUrlQuery>
+#include <QWindow>
 #include <QtGlobal>
 
 #ifdef Q_OS_ANDROID
@@ -78,6 +79,7 @@
 #include <QtCore/qcoreapplication_platform.h>
 #endif
 
+#include <algorithm>
 #include <cassert>
 #include <chrono>
 #include <cmath>
@@ -1278,6 +1280,28 @@ void PopupMenu(QMenu* menu, const QPoint& point, QAction* at_action)
     // The qminimal plugin does not provide window system integration.
     if (QApplication::platformName() == "minimal") return;
     menu->popup(point, at_action);
+}
+
+void PopupMenuAboveWidget(QMenu* menu, QWidget* anchor)
+{
+    QWidget* window = anchor->window();
+    QRect bounds(window->mapToGlobal(QPoint()), window->size());
+    const QScreen* screen = window->windowHandle() ? window->windowHandle()->screen() : QGuiApplication::primaryScreen();
+    if (screen) bounds = bounds.intersected(screen->availableGeometry());
+    if (bounds.isEmpty()) return;
+
+    const QRect anchor_rect(anchor->mapToGlobal(QPoint()), anchor->size());
+    const auto position = [&](const QSize& size) {
+        return QPoint(std::clamp(anchor_rect.right() - size.width() + 1, bounds.left(), bounds.right() - size.width() + 1),
+                      std::clamp(anchor_rect.top() - size.height(), bounds.top(), bounds.bottom() - size.height() + 1));
+    };
+    const QSize size = menu->sizeHint().boundedTo(bounds.size());
+    PopupMenu(menu, position(size));
+    if (!menu->isVisible()) return;
+    // QMenu::popup() may choose a different screen position or restore its natural
+    // size. Constrain the actual top-level menu after Qt has laid out its actions.
+    menu->resize(menu->size().boundedTo(bounds.size()));
+    menu->move(position(menu->size()));
 }
 
 QDateTime StartOfDay(const QDate& date)
