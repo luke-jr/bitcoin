@@ -11,6 +11,7 @@
 #include <clientversion.h>
 #include <common/system.h>
 #include <interfaces/node.h>
+#include <logging.h>
 #include <node/connection_types.h>
 #include <qt/bantablemodel.h>
 #include <qt/clientmodel.h>
@@ -35,6 +36,7 @@
 #include <QAbstractButton>
 #include <QAbstractItemModel>
 #include <QColor>
+#include <QCloseEvent>
 #include <QDateTime>
 #include <QEvent>
 #include <QFont>
@@ -1104,6 +1106,14 @@ void RPCConsole::keyPressEvent(QKeyEvent *event)
     }
 }
 
+#ifdef Q_OS_ANDROID
+void RPCConsole::closeEvent(QCloseEvent* event)
+{
+    QWidget::closeEvent(event);
+    if (event->isAccepted() && isWindow() && !m_node.shutdownRequested()) Q_EMIT returnToMainWindow();
+}
+#endif
+
 void RPCConsole::changeEvent(QEvent* e)
 {
     if (e->type() == QEvent::PaletteChange) {
@@ -1481,6 +1491,12 @@ void RPCConsole::resizeEvent(QResizeEvent *event)
 
 void RPCConsole::showEvent(QShowEvent *event)
 {
+#ifdef Q_OS_ANDROID
+    const bool file_logging = LogInstance().m_print_to_file;
+    ui->openDebugLogfileButton->setVisible(file_logging);
+    ui->labelDebugLogfile->setWordWrap(true);
+    ui->labelDebugLogfile->setText(file_logging ? tr("Debug log file") : tr("System log (logcat): %1").arg(QStringLiteral("BitcoinKnots")));
+#endif
     QWidget::showEvent(event);
 
     if (!clientModel || !clientModel->getPeerTableModel())

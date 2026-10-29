@@ -64,6 +64,10 @@
 #include <QTranslator>
 #include <QWindow>
 
+#ifdef Q_OS_ANDROID
+#include <qt/androidwindowchrome.h>
+#endif
+
 // Declare meta types used for QMetaObject::invokeMethod
 Q_DECLARE_METATYPE(bool*)
 Q_DECLARE_METATYPE(CAmount)
@@ -217,6 +221,9 @@ BitcoinApplication::BitcoinApplication()
     // Qt runs setlocale(LC_ALL, "") on initialization.
     RegisterMetaTypes();
     setQuitOnLastWindowClosed(false);
+#ifdef Q_OS_ANDROID
+    InstallAndroidWindowChrome(*this);
+#endif
 }
 
 void BitcoinApplication::setupPlatformStyle()

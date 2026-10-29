@@ -111,6 +111,11 @@ BitcoinGUI::BitcoinGUI(interfaces::Node& node, const PlatformStyle *_platformSty
     updateWindowTitle();
 
     rpcConsole = new RPCConsole(node, _platformStyle, nullptr);
+#ifdef Q_OS_ANDROID
+    connect(rpcConsole, &RPCConsole::returnToMainWindow, this, [this] {
+        GUIUtil::bringToFront(this);
+    });
+#endif
     helpMessageDialog = new HelpMessageDialog(this, false);
 #ifdef ENABLE_WALLET
     if(enableWallet)
@@ -634,8 +639,10 @@ void BitcoinGUI::createMenuBar()
     }
 
     QMenu *help = appMenuBar->addMenu(tr("&Help"));
+#ifndef Q_OS_ANDROID
     help->addAction(showHelpMessageAction);
     help->addSeparator();
+#endif
     help->addAction(aboutAction);
     help->addAction(aboutQtAction);
 }

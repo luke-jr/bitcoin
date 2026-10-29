@@ -55,6 +55,10 @@ private:
     void shutdown();
 
     QPixmap pixmap;
+#ifdef Q_OS_ANDROID
+    QColor m_background_start;
+    QColor m_background_end;
+#endif
     QString curMessage;
     QColor curColor;
     int curAlignment{0};

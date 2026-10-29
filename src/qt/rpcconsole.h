@@ -38,6 +38,7 @@ namespace Ui {
 
 QT_BEGIN_NAMESPACE
 class QColor;
+class QCloseEvent;
 class QEvent;
 class QDateTime;
 class QLabel;
@@ -94,10 +95,18 @@ public:
 
     QLabel *m_label_softwareexpiry;
 
+#ifdef Q_OS_ANDROID
+Q_SIGNALS:
+    void returnToMainWindow();
+#endif
+
 protected:
     virtual bool eventFilter(QObject* obj, QEvent *event) override;
     void keyPressEvent(QKeyEvent *) override;
     void changeEvent(QEvent* e) override;
+#ifdef Q_OS_ANDROID
+    void closeEvent(QCloseEvent* event) override;
+#endif
 
 private Q_SLOTS:
     void on_lineEdit_returnPressed();

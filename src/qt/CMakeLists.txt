@@ -406,6 +406,7 @@ endif()
 
 if(ANDROID)
   # Qt's Android loader invokes main() from an ABI-specific shared library.
+  target_sources(bitcoinqt PRIVATE androidwindowchrome.cpp androidwindowchrome.h)
   # The Qt helper also generates androiddeployqt APK and AAB build targets.
   qt6_add_executable(bitcoin-qt
     main.cpp

@@ -24,6 +24,12 @@
 #include <QFileDialog>
 #include <QSettings>
 #include <QMessageBox>
+#ifdef Q_OS_ANDROID
+#include <QButtonGroup>
+#include <QMouseEvent>
+#include <QScrollArea>
+#include <QScroller>
+#endif
 
 #include <cmath>
 #include <cstdlib>
@@ -113,6 +119,31 @@ void FreespaceChecker::check()
 }
 
 namespace {
+#ifdef Q_OS_ANDROID
+class IntroOptionLabel : public QLabel
+{
+    QAbstractButton* const m_option;
+
+public:
+    explicit IntroOptionLabel(QAbstractButton* option, QWidget* parent) :
+        QLabel(option->text(), parent), m_option(option)
+    {
+        setWordWrap(true);
+        setBuddy(option);
+        setToolTip(option->toolTip());
+    }
+
+protected:
+    void mouseReleaseEvent(QMouseEvent* event) override
+    {
+        if (event->button() == Qt::LeftButton && rect().contains(event->pos())) {
+            m_option->click();
+        }
+        QLabel::mouseReleaseEvent(event);
+    }
+};
+#endif
+
 //! Return pruning size that will be used if automatic pruning is enabled.
 int GetPruneTargetMiB()
 {
@@ -203,11 +234,59 @@ Intro::Intro(QWidget *parent, int64_t blockchain_size_gb, int64_t chain_state_si
             ui->assumevalidBlock->setReadOnly(true);
         }
     }
+#ifndef Q_OS_ANDROID
     {
         // TODO: Ideally, we would include actual margins here (instead of extra digits), but this seems non-trivial
         const int text_width = ui->assumevalidBlock->fontMetrics().horizontalAdvance(QStringLiteral("4")) * (64 + 4);
         ui->assumevalidBlock->setFixedWidth(text_width);
     }
+#endif
+
+#ifdef Q_OS_ANDROID
+    // A phone may not have enough height for the wrapped explanations. Keep the
+    // buttons visible and let the form grow vertically instead of squeezing text.
+    ui->verticalLayout->removeWidget(ui->buttonBox);
+    auto* content = new QWidget;
+    content->setLayout(ui->verticalLayout);
+    ui->lblPruneSuffix->setWordWrap(true);
+    ui->pruneOptLayout->setDirection(QBoxLayout::TopToBottom);
+    delete ui->pruneOptLayout->takeAt(ui->pruneOptLayout->count() - 1);
+    auto* directory_options = new QButtonGroup(content);
+    directory_options->addButton(ui->dataDirDefault);
+    directory_options->addButton(ui->dataDirCustom);
+    // QAbstractButton captions do not wrap. Separate captions allow the form
+    // to fit a narrow viewport, including when Android uses larger fonts.
+    QAbstractButton* const options[]{ui->dataDirDefault, ui->dataDirCustom, ui->prune, ui->assumevalid};
+    for (auto* option : options) {
+        auto* row = new QWidget(option->parentWidget());
+        QSizePolicy row_policy{QSizePolicy::Expanding, QSizePolicy::Minimum};
+        row_policy.setHeightForWidth(true);
+        row->setSizePolicy(row_policy);
+        delete option->parentWidget()->layout()->replaceWidget(option, row);
+        auto* row_layout = new QHBoxLayout(row);
+        row_layout->setContentsMargins(0, 0, 0, 0);
+        auto* caption = new IntroOptionLabel(option, row);
+        option->setAccessibleName(option->text());
+        option->setText(QString());
+        row_layout->addWidget(option);
+        row_layout->addWidget(caption, 1);
+    }
+    for (auto* label : content->findChildren<QLabel*>()) {
+        if (label->wordWrap()) {
+            auto policy = label->sizePolicy();
+            policy.setVerticalPolicy(QSizePolicy::Minimum);
+            label->setSizePolicy(policy);
+        }
+    }
+    auto* scroll = new QScrollArea(this);
+    scroll->setFrameShape(QFrame::NoFrame);
+    scroll->setWidgetResizable(true);
+    scroll->setWidget(content);
+    QScroller::grabGesture(scroll->viewport(), QScroller::TouchGesture);
+    auto* dialog_layout = new QVBoxLayout(this);
+    dialog_layout->addWidget(scroll);
+    dialog_layout->addWidget(ui->buttonBox);
+#endif
 
     startThread();
 }
@@ -318,7 +397,9 @@ bool Intro::showIfNeeded(std::unique_ptr<Intro>& intro)
      * override -datadir in the bitcoin.conf file in the default data directory
      * (to be consistent with bitcoind behavior)
      */
-    if(dataDir != GUIUtil::getDefaultDataDirectory()) {
+    // Compare with the core default, which may differ from the GUI default on
+    // platforms such as Android where Qt supplies the private storage path.
+    if(dataDir != GUIUtil::PathToQString(GetDefaultDataDir())) {
         gArgs.SoftSetArg("-datadir", fs::PathToString(GUIUtil::QStringToPath(dataDir))); // use OS locale for path setting
     }
     return true;
