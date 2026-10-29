@@ -21,7 +21,7 @@
         android:allowBackup="false"
         android:fullBackupContent="false">
         <activity
-            android:name="org.qtproject.qt.android.bindings.QtActivity"
+            android:name="org.bitcoinknots.qt.KnotsActivity"
             android:configChanges="orientation|uiMode|screenLayout|screenSize|smallestScreenSize|layoutDirection|locale|fontScale|keyboard|keyboardHidden|navigation|mcc|mnc|density"
             android:label="Bitcoin Knots"
             android:launchMode="singleTop"
