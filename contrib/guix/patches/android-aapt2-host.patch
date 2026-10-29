@@ -1,0 +1,188 @@
+Make AOSP host tools portable to the source-built Guix Clang/libstdc++ stack.
+
+Add explicit standard headers, complete types before template instantiation,
+fulfil the mapped-file iterator contract, and use standard span/vector types.
+Use a fixed build ID instead of a Soong-generated build-number library.
+
+--- a/system/core/libutils/Errors.cpp
++++ b/system/core/libutils/Errors.cpp
+@@ -14,6 +14,7 @@
+  * limitations under the License.
+  */
+ #include <utils/Errors.h>
++#include <string.h>
+ 
+ namespace android {
+ 
+--- a/system/libziparchive/zip_archive.cc
++++ b/system/libziparchive/zip_archive.cc
+@@ -1370,7 +1370,7 @@
+ }  // namespace zip_archive
+ 
+ static std::span<uint8_t> bufferToSpan(zip_archive::Writer::Buffer buf) {
+-  return {buf.first, ssize_t(buf.second)};
++  return {buf.first, static_cast<std::span<uint8_t>::size_type>(buf.second)};
+ }
+ 
+ template <bool OnIncfs>
+--- a/frameworks/base/libs/androidfw/AssetManager2.cpp
++++ b/frameworks/base/libs/androidfw/AssetManager2.cpp
+@@ -1409,6 +1409,12 @@
+   return 0;
+ }
+ 
++struct Theme::Entry {
++  ApkAssetsCookie cookie;
++  uint32_t type_spec_flags;
++  Res_value value;
++};
++
+ std::unique_ptr<Theme> AssetManager2::NewTheme() {
+   constexpr size_t kInitialReserveSize = 32;
+   auto theme = std::unique_ptr<Theme>(new Theme(this));
+@@ -1434,11 +1440,6 @@
+ 
+ Theme::~Theme() = default;
+ 
+-struct Theme::Entry {
+-  ApkAssetsCookie cookie;
+-  uint32_t type_spec_flags;
+-  Res_value value;
+-};
+ 
+ base::expected<std::monostate, NullOrIOError> Theme::ApplyStyle(uint32_t resid, bool force) {
+   ATRACE_NAME("Theme::ApplyStyle");
+--- a/system/incremental_delivery/incfs/util/include/util/map_ptr.h
++++ b/system/incremental_delivery/incfs/util/include/util/map_ptr.h
+@@ -185,6 +185,17 @@
+             return *this;
+         }
+ 
++        const_iterator& operator--() {
++            safe_ptr_ = safe_ptr_ + -1;
++            return *this;
++        }
++
++        const_iterator operator--(int) {
++            const_iterator previous(*this);
++            --*this;
++            return previous;
++        }
++
+         const const_iterator operator++(int) {
+             const_iterator temp(*this);
+             safe_ptr_++;
+--- a/frameworks/base/tools/aapt2/cmd/Command.h
++++ b/frameworks/base/tools/aapt2/cmd/Command.h
+@@ -18,6 +18,7 @@
+ #define AAPT_COMMAND_H
+ 
+ #include <functional>
++#include <memory>
+ #include <optional>
+ #include <ostream>
+ #include <string>
+--- a/frameworks/base/tools/aapt2/AppInfo.h
++++ b/frameworks/base/tools/aapt2/AppInfo.h
+@@ -17,6 +17,7 @@
+ #ifndef AAPT_APP_INFO_H
+ #define AAPT_APP_INFO_H
+ 
++#include <cstdint>
+ #include <optional>
+ #include <set>
+ #include <string>
+--- a/frameworks/base/tools/aapt2/compile/InlineXmlFormatParser.h
++++ b/frameworks/base/tools/aapt2/compile/InlineXmlFormatParser.h
+@@ -17,6 +17,7 @@
+ #ifndef AAPT_COMPILE_INLINEXMLFORMATPARSER_H
+ #define AAPT_COMPILE_INLINEXMLFORMATPARSER_H
+ 
++#include "xml/XmlDom.h"
+ #include <memory>
+ #include <vector>
+ 
+--- a/frameworks/base/tools/aapt2/dump/DumpManifest.cpp
++++ b/frameworks/base/tools/aapt2/dump/DumpManifest.cpp
+@@ -217,8 +217,7 @@
+ class ManifestExtractor {
+  public:
+ 
+-  explicit ManifestExtractor(LoadedApk* apk, DumpManifestOptions& options)
+-      : apk_(apk), options_(options) { }
++  explicit ManifestExtractor(LoadedApk* apk, DumpManifestOptions& options);
+ 
+   class Element {
+    public:
+@@ -509,7 +508,7 @@
+ 
+  private:
+   std::unique_ptr<xml::XmlResource> doc_;
+-  std::unique_ptr<CommonFeatureGroup> commonFeatureGroup_ = util::make_unique<CommonFeatureGroup>();
++  std::unique_ptr<CommonFeatureGroup> commonFeatureGroup_;
+   std::map<std::string, ConfigDescription> locales_;
+   std::map<uint16_t, ConfigDescription> densities_;
+   std::vector<Element*> parent_stack_;
+@@ -2470,6 +2469,10 @@
+     ToProto(child.get(), out_badging);
+   }
+ }
++
++ManifestExtractor::ManifestExtractor(LoadedApk* apk, DumpManifestOptions& options)
++    : apk_(apk), options_(options),
++      commonFeatureGroup_(util::make_unique<CommonFeatureGroup>()) {}
+ 
+ bool ManifestExtractor::Extract(android::IDiagnostics* diag) {
+   // Load the manifest
+--- a/frameworks/base/tools/aapt2/util/Files.cpp
++++ b/frameworks/base/tools/aapt2/util/Files.cpp
+@@ -189,7 +189,7 @@
+   base->append(part.data(), part.size());
+ }
+ 
+-std::string BuildPath(std::vector<const StringPiece>&& args) {
++std::string BuildPath(std::vector<StringPiece>&& args) {
+   if (args.empty()) {
+     return "";
+   }
+--- a/frameworks/base/tools/aapt2/util/Files.h
++++ b/frameworks/base/tools/aapt2/util/Files.h
+@@ -60,7 +60,7 @@
+ void AppendPath(std::string* base, android::StringPiece part);
+ 
+ // Concatenates the list of paths and separates each part with the directory separator.
+-std::string BuildPath(std::vector<const android::StringPiece>&& args);
++std::string BuildPath(std::vector<android::StringPiece>&& args);
+ 
+ // Makes all the directories in `path`. The last element in the path is interpreted as a directory.
+ bool mkdirs(const std::string& path);
+--- a/frameworks/base/libs/androidfw/ApkParsing.cpp
++++ b/frameworks/base/libs/androidfw/ApkParsing.cpp
+@@ -14,6 +14,7 @@
+  * limitations under the License.
+  */
+ 
++#include <cstring>
+ #include "androidfw/ApkParsing.h"
+ #include <algorithm>
+ #include <array>
+--- a/frameworks/base/tools/aapt2/util/Util.cpp
++++ b/frameworks/base/tools/aapt2/util/Util.cpp
+@@ -26,7 +26,7 @@
+ #include "androidfw/BigBuffer.h"
+ #include "androidfw/StringPiece.h"
+ #include "androidfw/Util.h"
+-#include "build/version.h"
++
+ #include "text/Unicode.h"
+ #include "text/Utf8Iterator.h"
+ #include "utils/Unicode.h"
+@@ -229,7 +229,7 @@
+   static const char* const sMinorVersion = "19";
+ 
+   // The build id of aapt2 binary.
+-  static std::string sBuildId = android::build::GetBuildNumber();
++  static std::string sBuildId = "299fe6f5-guix";
+ 
+   if (android::base::StartsWith(sBuildId, "eng.")) {
+     time_t now = time(0);

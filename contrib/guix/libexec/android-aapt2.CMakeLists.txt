@@ -1,0 +1,232 @@
+# Copyright (c) 2026 The Bitcoin Knots developers
+# Distributed under the MIT software license, see the accompanying file COPYING.
+# Standalone Linux host build; source lists mirror the pinned AOSP Android.bp.
+
+cmake_minimum_required(VERSION 3.16)
+project(android_aapt2 LANGUAGES C CXX)
+set(CMAKE_CXX_STANDARD 23)
+set(CMAKE_POSITION_INDEPENDENT_CODE ON)
+add_compile_options("-ffile-prefix-map=${CMAKE_SOURCE_DIR}=."
+                    "-ffile-prefix-map=${CMAKE_BINARY_DIR}=.")
+find_package(Threads REQUIRED)
+find_package(ZLIB REQUIRED)
+find_package(PNG REQUIRED)
+find_package(EXPAT REQUIRED)
+find_package(Protobuf 3.20 REQUIRED)
+find_package(fmt 9 REQUIRED)
+include_directories(
+  system/libbase/include system/logging/liblog/include
+  system/core/libcutils/include system/core/libutils/include
+  system/core/libsystem/include system/core/libprocessgroup/include
+  system/libziparchive/include system/libziparchive/incfs_support/include
+  system/incremental_delivery/incfs/util/include
+  frameworks/native/include frameworks/native/libs/nativebase/include
+  frameworks/native/libs/nativewindow/include
+  frameworks/base/libs/androidfw/include
+  frameworks/base/cmds/idmap2/libidmap2_policies/include
+  frameworks/base/tools/aapt2
+  ${CMAKE_BINARY_DIR}
+  ${CMAKE_BINARY_DIR}/frameworks/base/tools/aapt2
+  ${GTEST_INCLUDE_DIR})
+add_compile_definitions(ANDROID_SMP=1 STATIC_ANDROIDFW_FOR_TOOLS INCFS_SUPPORT_DISABLED=1 ZLIB_CONST)
+add_compile_options(-Wno-unused-parameter -Wno-missing-field-initializers)
+
+add_library(android_log STATIC
+  system/logging/liblog/log_event_list.cpp
+  system/logging/liblog/log_event_write.cpp
+  system/logging/liblog/logger_name.cpp
+  system/logging/liblog/logger_read.cpp
+  system/logging/liblog/logger_write.cpp
+  system/logging/liblog/logprint.cpp
+  system/logging/liblog/properties.cpp
+  system/logging/liblog/event_tag_map.cpp
+)
+
+add_library(android_base STATIC
+  system/libbase/abi_compatibility.cpp
+  system/libbase/chrono_utils.cpp
+  system/libbase/cmsg.cpp
+  system/libbase/file.cpp
+  system/libbase/hex.cpp
+  system/libbase/logging.cpp
+  system/libbase/mapped_file.cpp
+  system/libbase/parsebool.cpp
+  system/libbase/parsenetaddress.cpp
+  system/libbase/posix_strerror_r.cpp
+  system/libbase/process.cpp
+  system/libbase/properties.cpp
+  system/libbase/stringprintf.cpp
+  system/libbase/strings.cpp
+  system/libbase/threads.cpp
+  system/libbase/test_utils.cpp
+  system/libbase/errors_unix.cpp
+)
+
+add_library(android_cutils STATIC
+  system/core/libcutils/native_handle.cpp
+  system/core/libcutils/threads.cpp
+  system/core/libcutils/trace-host.cpp
+)
+
+add_library(android_utils STATIC
+  system/core/libutils/Errors.cpp
+  system/core/libutils/FileMap.cpp
+  system/core/libutils/JenkinsHash.cpp
+  system/core/libutils/LightRefBase.cpp
+  system/core/libutils/NativeHandle.cpp
+  system/core/libutils/Printer.cpp
+  system/core/libutils/RefBase.cpp
+  system/core/libutils/SharedBuffer.cpp
+  system/core/libutils/StopWatch.cpp
+  system/core/libutils/String8.cpp
+  system/core/libutils/String16.cpp
+  system/core/libutils/StrongPointer.cpp
+  system/core/libutils/SystemClock.cpp
+  system/core/libutils/Threads.cpp
+  system/core/libutils/Timers.cpp
+  system/core/libutils/Tokenizer.cpp
+  system/core/libutils/Unicode.cpp
+  system/core/libutils/VectorImpl.cpp
+  system/core/libutils/misc.cpp
+  system/core/libutils/Looper.cpp
+)
+
+add_library(android_ziparchive STATIC
+  system/libziparchive/zip_archive.cc
+  system/libziparchive/zip_archive_stream_entry.cc
+  system/libziparchive/zip_cd_entry_map.cc
+  system/libziparchive/zip_error.cpp
+  system/libziparchive/zip_writer.cc
+)
+
+add_library(android_fw STATIC
+  frameworks/base/libs/androidfw/ApkParsing.cpp
+  frameworks/base/libs/androidfw/BigBuffer.cpp
+  frameworks/base/libs/androidfw/ResourceTimer.cpp
+  frameworks/base/libs/androidfw/StringPool.cpp
+  frameworks/base/libs/androidfw/ApkAssets.cpp
+  frameworks/base/libs/androidfw/Asset.cpp
+  frameworks/base/libs/androidfw/AssetDir.cpp
+  frameworks/base/libs/androidfw/AssetManager.cpp
+  frameworks/base/libs/androidfw/AssetManager2.cpp
+  frameworks/base/libs/androidfw/AssetsProvider.cpp
+  frameworks/base/libs/androidfw/AttributeResolution.cpp
+  frameworks/base/libs/androidfw/ChunkIterator.cpp
+  frameworks/base/libs/androidfw/ConfigDescription.cpp
+  frameworks/base/libs/androidfw/Idmap.cpp
+  frameworks/base/libs/androidfw/LoadedArsc.cpp
+  frameworks/base/libs/androidfw/Locale.cpp
+  frameworks/base/libs/androidfw/LocaleData.cpp
+  frameworks/base/libs/androidfw/misc.cpp
+  frameworks/base/libs/androidfw/ObbFile.cpp
+  frameworks/base/libs/androidfw/PosixUtils.cpp
+  frameworks/base/libs/androidfw/ResourceTypes.cpp
+  frameworks/base/libs/androidfw/ResourceUtils.cpp
+  frameworks/base/libs/androidfw/StreamingZipInflater.cpp
+  frameworks/base/libs/androidfw/TypeWrappers.cpp
+  frameworks/base/libs/androidfw/Util.cpp
+  frameworks/base/libs/androidfw/ZipFileRO.cpp
+  frameworks/base/libs/androidfw/ZipUtils.cpp
+)
+
+set(PROTOBUF_GENERATE_CPP_APPEND_PATH OFF)
+file(GLOB PROTOS "${CMAKE_SOURCE_DIR}/frameworks/base/tools/aapt2/*.proto")
+protobuf_generate_cpp(PROTO_SOURCES PROTO_HEADERS ${PROTOS})
+add_library(aapt2_protos STATIC ${PROTO_SOURCES} ${PROTO_HEADERS})
+target_link_libraries(aapt2_protos PUBLIC protobuf::libprotobuf)
+
+add_library(aapt2_lib STATIC
+  frameworks/base/tools/aapt2/cmd/ApkInfo.cpp
+  frameworks/base/tools/aapt2/cmd/Command.cpp
+  frameworks/base/tools/aapt2/cmd/Compile.cpp
+  frameworks/base/tools/aapt2/cmd/Convert.cpp
+  frameworks/base/tools/aapt2/cmd/Diff.cpp
+  frameworks/base/tools/aapt2/cmd/Dump.cpp
+  frameworks/base/tools/aapt2/cmd/Link.cpp
+  frameworks/base/tools/aapt2/cmd/Optimize.cpp
+  frameworks/base/tools/aapt2/cmd/Util.cpp
+  frameworks/base/tools/aapt2/compile/IdAssigner.cpp
+  frameworks/base/tools/aapt2/compile/InlineXmlFormatParser.cpp
+  frameworks/base/tools/aapt2/compile/NinePatch.cpp
+  frameworks/base/tools/aapt2/compile/Png.cpp
+  frameworks/base/tools/aapt2/compile/PngChunkFilter.cpp
+  frameworks/base/tools/aapt2/compile/PngCrunch.cpp
+  frameworks/base/tools/aapt2/compile/PseudolocaleGenerator.cpp
+  frameworks/base/tools/aapt2/compile/Pseudolocalizer.cpp
+  frameworks/base/tools/aapt2/compile/XmlIdCollector.cpp
+  frameworks/base/tools/aapt2/configuration/ConfigurationParser.cpp
+  frameworks/base/tools/aapt2/dump/DumpManifest.cpp
+  frameworks/base/tools/aapt2/filter/AbiFilter.cpp
+  frameworks/base/tools/aapt2/filter/ConfigFilter.cpp
+  frameworks/base/tools/aapt2/format/Archive.cpp
+  frameworks/base/tools/aapt2/format/Container.cpp
+  frameworks/base/tools/aapt2/format/binary/BinaryResourceParser.cpp
+  frameworks/base/tools/aapt2/format/binary/ResChunkPullParser.cpp
+  frameworks/base/tools/aapt2/format/binary/ResEntryWriter.cpp
+  frameworks/base/tools/aapt2/format/binary/TableFlattener.cpp
+  frameworks/base/tools/aapt2/format/binary/XmlFlattener.cpp
+  frameworks/base/tools/aapt2/format/proto/ProtoDeserialize.cpp
+  frameworks/base/tools/aapt2/format/proto/ProtoSerialize.cpp
+  frameworks/base/tools/aapt2/io/BigBufferStream.cpp
+  frameworks/base/tools/aapt2/io/File.cpp
+  frameworks/base/tools/aapt2/io/FileStream.cpp
+  frameworks/base/tools/aapt2/io/FileSystem.cpp
+  frameworks/base/tools/aapt2/io/StringStream.cpp
+  frameworks/base/tools/aapt2/io/Util.cpp
+  frameworks/base/tools/aapt2/io/ZipArchive.cpp
+  frameworks/base/tools/aapt2/link/AutoVersioner.cpp
+  frameworks/base/tools/aapt2/link/ManifestFixer.cpp
+  frameworks/base/tools/aapt2/link/NoDefaultResourceRemover.cpp
+  frameworks/base/tools/aapt2/link/ProductFilter.cpp
+  frameworks/base/tools/aapt2/link/PrivateAttributeMover.cpp
+  frameworks/base/tools/aapt2/link/ReferenceLinker.cpp
+  frameworks/base/tools/aapt2/link/ResourceExcluder.cpp
+  frameworks/base/tools/aapt2/link/TableMerger.cpp
+  frameworks/base/tools/aapt2/link/XmlCompatVersioner.cpp
+  frameworks/base/tools/aapt2/link/XmlNamespaceRemover.cpp
+  frameworks/base/tools/aapt2/link/XmlReferenceLinker.cpp
+  frameworks/base/tools/aapt2/optimize/MultiApkGenerator.cpp
+  frameworks/base/tools/aapt2/optimize/ResourceDeduper.cpp
+  frameworks/base/tools/aapt2/optimize/ResourceFilter.cpp
+  frameworks/base/tools/aapt2/optimize/Obfuscator.cpp
+  frameworks/base/tools/aapt2/optimize/VersionCollapser.cpp
+  frameworks/base/tools/aapt2/process/SymbolTable.cpp
+  frameworks/base/tools/aapt2/split/TableSplitter.cpp
+  frameworks/base/tools/aapt2/text/Printer.cpp
+  frameworks/base/tools/aapt2/text/Unicode.cpp
+  frameworks/base/tools/aapt2/text/Utf8Iterator.cpp
+  frameworks/base/tools/aapt2/util/Files.cpp
+  frameworks/base/tools/aapt2/util/Util.cpp
+  frameworks/base/tools/aapt2/Debug.cpp
+  frameworks/base/tools/aapt2/DominatorTree.cpp
+  frameworks/base/tools/aapt2/java/AnnotationProcessor.cpp
+  frameworks/base/tools/aapt2/java/ClassDefinition.cpp
+  frameworks/base/tools/aapt2/java/JavaClassGenerator.cpp
+  frameworks/base/tools/aapt2/java/ManifestClassGenerator.cpp
+  frameworks/base/tools/aapt2/java/ProguardRules.cpp
+  frameworks/base/tools/aapt2/LoadedApk.cpp
+  frameworks/base/tools/aapt2/Resource.cpp
+  frameworks/base/tools/aapt2/ResourceParser.cpp
+  frameworks/base/tools/aapt2/ResourceTable.cpp
+  frameworks/base/tools/aapt2/ResourceUtils.cpp
+  frameworks/base/tools/aapt2/ResourceValues.cpp
+  frameworks/base/tools/aapt2/SdkConstants.cpp
+  frameworks/base/tools/aapt2/trace/TraceBuffer.cpp
+  frameworks/base/tools/aapt2/xml/XmlActionExecutor.cpp
+  frameworks/base/tools/aapt2/xml/XmlDom.cpp
+  frameworks/base/tools/aapt2/xml/XmlPullParser.cpp
+  frameworks/base/tools/aapt2/xml/XmlUtil.cpp
+  frameworks/base/tools/aapt2/ValueTransformer.cpp
+)
+
+target_link_libraries(android_base PUBLIC android_log Threads::Threads fmt::fmt)
+target_link_libraries(android_cutils PUBLIC android_log Threads::Threads)
+target_link_libraries(android_utils PUBLIC android_base android_cutils android_log Threads::Threads)
+target_link_libraries(android_ziparchive PUBLIC android_base android_log ZLIB::ZLIB)
+add_library(android_incfs_utils STATIC system/incremental_delivery/incfs/util/map_ptr.cpp)
+target_link_libraries(android_incfs_utils PUBLIC android_utils android_base)
+target_link_libraries(android_fw PUBLIC android_base android_log android_utils android_ziparchive android_incfs_utils ZLIB::ZLIB)
+target_link_libraries(aapt2_lib PUBLIC android_fw aapt2_protos PNG::PNG EXPAT::EXPAT)
+add_executable(aapt2 frameworks/base/tools/aapt2/Main.cpp)
+target_link_libraries(aapt2 PRIVATE aapt2_lib)
+install(TARGETS aapt2 RUNTIME DESTINATION bin)
