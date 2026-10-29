@@ -101,6 +101,9 @@ host_os+=$(findstring openbsd,$(full_host_os))
 host_os+=$(findstring mingw32,$(full_host_os))
 
 host_os:=$(strip $(host_os))
+ifneq ($(findstring android,$(full_host_os)),)
+host_os:=android
+endif
 ifeq ($(host_os),)
 host_os=$(full_host_os)
 endif
@@ -213,6 +216,9 @@ $(host_prefix)/toolchain.cmake : toolchain.cmake.in $(host_prefix)/.stamp_$(fina
             -e 's|@host_system_name@|$($(host_os)_cmake_system_name)|' \
             -e 's|@host_system_version@|$($(host_os)_cmake_system_version)|' \
             -e 's|@host_arch@|$(host_arch)|' \
+            -e 's|@ANDROID_NDK@|$(ANDROID_NDK)|' \
+            -e 's|@ANDROID_API@|$(ANDROID_API)|' \
+            -e 's|@ANDROID_ABI@|$(ANDROID_ABI)|' \
             -e 's|@CC@|$(host_CC)|' \
             -e 's|@CXX@|$(host_CXX)|' \
             -e 's|@OSX_SDK@|$(OSX_SDK)|' \

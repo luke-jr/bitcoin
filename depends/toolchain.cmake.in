@@ -14,9 +14,20 @@ if(@depends_crosscompiling@)
   set(CMAKE_SYSTEM_VERSION @host_system_version@)
   set(CMAKE_SYSTEM_PROCESSOR @host_arch@)
 
-  set(CMAKE_C_COMPILER_TARGET @host@)
-  set(CMAKE_CXX_COMPILER_TARGET @host@)
-  set(CMAKE_OBJCXX_COMPILER_TARGET @host@)
+  if(CMAKE_SYSTEM_NAME STREQUAL "Android")
+    set(CMAKE_ANDROID_NDK "@ANDROID_NDK@")
+    set(CMAKE_ANDROID_ARCH_ABI "@ANDROID_ABI@")
+    if(NOT DEFINED CMAKE_ANDROID_STL_TYPE)
+      set(CMAKE_ANDROID_STL_TYPE c++_static)
+    endif()
+    # Bionic provides pthreads in libc, but omits pthread_cancel, which is
+    # used by CMake's libc pthread probe. Prefer its working -pthread probe.
+    set(THREADS_PREFER_PTHREAD_FLAG ON)
+  else()
+    set(CMAKE_C_COMPILER_TARGET @host@)
+    set(CMAKE_CXX_COMPILER_TARGET @host@)
+    set(CMAKE_OBJCXX_COMPILER_TARGET @host@)
+  endif()
 endif()
 
 if(NOT DEFINED CMAKE_C_FLAGS_INIT)

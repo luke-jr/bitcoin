@@ -29,6 +29,7 @@ Common `host-platform-triplet`s for cross compilation are:
 - `arm64-apple-darwin` for ARM macOS
 - `arm-linux-gnueabihf` for Linux ARM 32 bit
 - `aarch64-linux-gnu` for Linux ARM 64 bit
+- `aarch64-linux-android` for Android ARM 64 bit (see below)
 - `powerpc64-linux-gnu` for Linux POWER 64 bit (big endian)
 - `powerpc64le-linux-gnu` for Linux POWER 64 bit (little endian)
 - `riscv32-linux-gnu` for Linux RISC-V 32 bit
@@ -87,6 +88,16 @@ For linux RISC-V 64-bit cross compilation (there are no packages for 32-bit):
 For linux S390X cross compilation:
 
     sudo apt-get install g++-s390x-linux-gnu binutils-s390x-linux-gnu
+
+#### For Android cross compilation
+
+Install Android NDK r28c and pass its location to depends. The supported target is
+`arm64-v8a`, with a default minimum API level of 28 (override with `ANDROID_API`).
+For a build without Qt or Berkeley DB:
+
+    make HOST=aarch64-linux-android ANDROID_NDK=/path/to/android-ndk-r28c NO_QT=1 NO_BDB=1 NO_ZMQ=1 NO_UPNP=1 NO_USDT=1
+
+Use the generated `aarch64-linux-android/toolchain.cmake` for the main CMake build.
 
 ### Install the required dependencies: FreeBSD
 

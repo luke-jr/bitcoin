@@ -21,7 +21,10 @@ define $(package)_set_vars
   $(package)_cppflags_mingw32=-D_WIN32_WINNT=0x0A00
 
   ifeq ($(NO_HARDEN),)
+  # CMake's Android platform already enables the NDK's fortify level.
+  ifneq ($(host_os),android)
   $(package)_cppflags+=-D_FORTIFY_SOURCE=3
+  endif
   endif
 endef
 

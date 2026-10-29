@@ -1,4 +1,4 @@
-cmake: set minimum version to 3.5
+cmake: set minimum version to 3.5 and distinguish clang from clang-cl
 
 --- a/CMakeLists.txt
 +++ b/CMakeLists.txt
@@ -11,3 +11,12 @@ cmake: set minimum version to 3.5
  
  if (POLICY CMP0054)
      cmake_policy(SET CMP0054 NEW)
+@@ -200,6 +200,7 @@
+ if (("${CMAKE_C_COMPILER_ID}" STREQUAL "GNU") OR (${CLANG}))
+     set(GNUC 1)
+ endif()
+-if (("${CMAKE_C_COMPILER_ID}" STREQUAL "MSVC") OR (${CLANG}))
++if (("${CMAKE_C_COMPILER_ID}" STREQUAL "MSVC") OR
++    ("${CMAKE_C_SIMULATE_ID}" STREQUAL "MSVC"))
+     set(MSVC 1)
+ endif()
