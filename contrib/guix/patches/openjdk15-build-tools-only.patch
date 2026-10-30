@@ -1,0 +1,208 @@
+Build a source-selected Java command-line and bootstrap tool image.
+
+The explicit --enable-build-tools-only option omits desktop modules before
+Java/native compilation, skips their unused configure dependencies and omits
+their bootstrap generators. Normal builds are unchanged. HotSpot remains the
+selected upstream VM variant; no tests, cryptography or required APIs are stubbed.
+
+--- a/make/autoconf/libraries.m4
++++ b/make/autoconf/libraries.m4
+@@ -41,2 +41,16 @@
+ [
++  AC_ARG_ENABLE([build-tools-only],
++      [AS_HELP_STRING([--enable-build-tools-only],
++          [build only the modules needed by Java command-line and bootstrap tools])],
++      [case "$enable_build_tools_only" in
++         yes) BUILD_TOOLS_ONLY=true ;;
++         no) BUILD_TOOLS_ONLY=false ;;
++         *) AC_MSG_ERROR([--enable-build-tools-only accepts only yes or no]) ;;
++       esac],
++      [BUILD_TOOLS_ONLY=false])
++  AC_SUBST(BUILD_TOOLS_ONLY)
++  if test "x$BUILD_TOOLS_ONLY" = xtrue && test "x$ENABLE_HEADLESS_ONLY" != xtrue; then
++    AC_MSG_ERROR([--enable-build-tools-only requires --enable-headless-only])
++  fi
++
+   # Check if X11 is needed
+@@ -86,2 +100,11 @@
+     NEEDS_LIB_FFI=false
++  fi
++
++  # No java.desktop classes or native libraries are built in this mode.
++  if test "x$BUILD_TOOLS_ONLY" = xtrue; then
++    NEEDS_LIB_X11=false
++    NEEDS_LIB_CUPS=false
++    NEEDS_LIB_FONTCONFIG=false
++    NEEDS_LIB_FREETYPE=false
++    NEEDS_LIB_ALSA=false
+   fi
+--- a/make/autoconf/lib-bundled.m4
++++ b/make/autoconf/lib-bundled.m4
+@@ -50,2 +50,4 @@
+ [
++  # Guard the body: AC_DEFUN_ONCE can hoist a guarded macro call.
++  if test "x$BUILD_TOOLS_ONLY" != xtrue; then
+   AC_ARG_WITH(libjpeg, [AS_HELP_STRING([--with-libjpeg],
+@@ -76,2 +78,3 @@
+   AC_SUBST(USE_EXTERNAL_LIBJPEG)
++  fi
+ ])
+@@ -83,2 +86,4 @@
+ [
++  # Guard the body: AC_DEFUN_ONCE can hoist a guarded macro call.
++  if test "x$BUILD_TOOLS_ONLY" != xtrue; then
+   AC_ARG_WITH(giflib, [AS_HELP_STRING([--with-giflib],
+@@ -109,2 +114,3 @@
+   AC_SUBST(USE_EXTERNAL_LIBGIF)
++  fi
+ ])
+@@ -116,2 +122,4 @@
+ [
++  # Guard the body: AC_DEFUN_ONCE can hoist a guarded macro call.
++  if test "x$BUILD_TOOLS_ONLY" != xtrue; then
+   AC_ARG_WITH(libpng, [AS_HELP_STRING([--with-libpng],
+@@ -150,2 +158,3 @@
+   AC_SUBST(PNG_LIBS)
++  fi
+ ])
+@@ -233,2 +242,4 @@
+ [
++  # Guard the body: AC_DEFUN_ONCE can hoist a guarded macro call.
++  if test "x$BUILD_TOOLS_ONLY" != xtrue; then
+   AC_ARG_WITH(lcms, [AS_HELP_STRING([--with-lcms],
+@@ -265,2 +276,3 @@
+   AC_SUBST(LCMS_LIBS)
++  fi
+ ])
+@@ -272,2 +284,4 @@
+ [
++  # Guard the body: AC_DEFUN_ONCE can hoist a guarded macro call.
++  if test "x$BUILD_TOOLS_ONLY" != xtrue; then
+   AC_ARG_WITH(harfbuzz, [AS_HELP_STRING([--with-harfbuzz],
+@@ -305,2 +319,3 @@
+   AC_SUBST(HARFBUZZ_LIBS)
+-])
++  fi
++])
+--- a/make/autoconf/lib-freetype.m4
++++ b/make/autoconf/lib-freetype.m4
+@@ -73,2 +73,4 @@
+ [
++  # Guard the body: AC_DEFUN_ONCE can hoist a guarded macro call.
++  if test "x$BUILD_TOOLS_ONLY" != xtrue; then
+   AC_ARG_WITH(freetype, [AS_HELP_STRING([--with-freetype],
+@@ -232,2 +234,3 @@
+   AC_SUBST(FREETYPE_LIBS)
++  fi
+ ])
+--- a/make/autoconf/spec.gmk.in
++++ b/make/autoconf/spec.gmk.in
+@@ -302,2 +302,3 @@
+ ENABLE_HEADLESS_ONLY := @ENABLE_HEADLESS_ONLY@
++BUILD_TOOLS_ONLY := @BUILD_TOOLS_ONLY@
+ 
+--- a/make/common/Modules.gmk
++++ b/make/common/Modules.gmk
+@@ -332,2 +332,15 @@
+ 
++# A tools-only image must omit modules before every compilation phase, not
++# merely trim a complete JDK with jlink. Keep the compiler, archive/signing,
++# inspection and bootstrap tools, their dependencies, and required providers.
++ifeq ($(BUILD_TOOLS_ONLY), true)
++  BUILD_TOOL_MODULES := \
++      java.base java.compiler java.logging java.xml \
++      jdk.compiler jdk.crypto.ec jdk.internal.opt jdk.jartool jdk.javadoc \
++      jdk.jdeps jdk.jlink jdk.unsupported jdk.zipfs
++  MODULES_FILTER += $(filter-out $(BUILD_TOOL_MODULES), \
++      $(call GetModuleNameFromModuleInfo, $(MODULE_INFOS)))
++endif
++
++
+ $(MODULE_DEPS_MAKEFILE): $(MODULE_INFOS) \
+--- a/make/CompileToolsJdk.gmk
++++ b/make/CompileToolsJdk.gmk
+@@ -38,2 +38,15 @@
+ 
++# These generators are used exclusively by java.desktop, which is not built
++# in a tools-only image. A tools-only boot JDK need not expose its GUI APIs.
++ifeq ($(BUILD_TOOLS_ONLY), true)
++  BUILD_TOOLS_DESKTOP_EXCLUDES := \
++      build/tools/compilefontconfig \
++      build/tools/dtdbuilder \
++      build/tools/generatenimbus \
++      build/tools/icondata/awt \
++      build/tools/x11wrappergen
++else
++  BUILD_TOOLS_DESKTOP_EXPORT := --add-exports java.desktop/sun.awt=ALL-UNNAMED
++endif
++
+ # Use += to be able to add to this from a custom extension
+@@ -48,2 +61,3 @@
+     EXCLUDES := \
++        $(BUILD_TOOLS_DESKTOP_EXCLUDES) \
+         build/tools/classlist \
+@@ -57,3 +71,3 @@
+     JAVAC_FLAGS := \
+-        --add-exports java.desktop/sun.awt=ALL-UNNAMED \
++        $(BUILD_TOOLS_DESKTOP_EXPORT) \
+         --add-exports java.base/sun.text=ALL-UNNAMED \
+@@ -64,2 +78,3 @@
+ 
++ifneq ($(BUILD_TOOLS_ONLY), true)
+ $(eval $(call SetupCopyFiles,COPY_NIMBUS_TEMPLATES, \
+@@ -70,2 +85,3 @@
+ TARGETS += $(COPY_NIMBUS_TEMPLATES)
++endif
+ 
+--- a/make/Main.gmk
++++ b/make/Main.gmk
+@@ -406,7 +406,7 @@
+ $(eval $(call SetupTarget, jdk-image, \
+     MAKEFILE := Images, \
+     TARGET := jdk, \
+-    DEPS := jmods zip-source demos release-file, \
++    DEPS := jmods zip-source $(if $(filter true,$(BUILD_TOOLS_ONLY)),,demos) release-file, \
+ ))
+
+ $(eval $(call SetupTarget, legacy-jre-image, \
+--- a/make/Images.gmk
++++ b/make/Images.gmk
+@@ -188,6 +188,7 @@
+
+ ################################################################################
+ # /demo dir
++ifneq ($(BUILD_TOOLS_ONLY), true)
+ # Avoid doing the expensive find unless called with "jdk" as target.
+ ifneq ($(filter jdk, $(MAKECMDGOALS)), )
+
+@@ -212,6 +213,7 @@
+   ))
+
+   JDK_TARGETS += $(JDK_COPY_DEMOS)
++endif
+ endif
+
+ ################################################################################
+--- a/make/modules/java.base/gendata/GendataBreakIterator.gmk
++++ b/make/modules/java.base/gendata/GendataBreakIterator.gmk
+@@ -56,2 +56,3 @@
+
++ifneq ($(BUILD_TOOLS_ONLY), true)
+ $(eval $(call SetupJavaCompilation, BUILD_BREAKITERATOR_LD, \
+@@ -65,2 +66,3 @@
+ ))
++endif
+
+@@ -68,6 +70,6 @@
+     --patch-module java.base=$(BREAK_ITERATOR_CLASSES)/java.base \
+-    --patch-module jdk.localedata=$(BREAK_ITERATOR_CLASSES)/jdk.localedata \
++    $(if $(filter true,$(BUILD_TOOLS_ONLY)),,--patch-module jdk.localedata=$(BREAK_ITERATOR_CLASSES)/jdk.localedata) \
+     --add-exports java.base/sun.text=ALL-UNNAMED \
+     --add-exports java.base/sun.text.resources=ALL-UNNAMED \
+-    --add-exports jdk.localedata/sun.text.resources.ext=ALL-UNNAMED \
++    $(if $(filter true,$(BUILD_TOOLS_ONLY)),,--add-exports jdk.localedata/sun.text.resources.ext=ALL-UNNAMED) \
+     #
+@@ -112,2 +114,2 @@
+
+-TARGETS += $(BIFILES) $(BIFILES_TH)
++TARGETS += $(BIFILES) $(if $(filter true,$(BUILD_TOOLS_ONLY)),,$(BIFILES_TH))

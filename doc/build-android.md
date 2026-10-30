@@ -19,6 +19,13 @@ framework resource stubs from pinned sources. No downloaded Android SDK, NDK,
 Qt installation, Gradle distribution or binary Maven library is a release input.
 The normal Guix bootstrap trust model still applies.
 
+The host Java bootstrap builds the runtime, compiler, archive and signing tools
+needed by these packages. Component and module selection exclude native desktop,
+audio and printing code before compilation. Legacy Java support classes needed
+by the compiler and Ant remain available; modular JDK stages select the tool
+modules and their runtime dependencies. This removes the GTK accessibility and
+SVG-loader paths that would otherwise require Go and Rust bootstrap toolchains.
+
 Pinned Gitiles source archives are authenticated by the recursive hash of their
 extracted contents, executable bits and symlinks. Request timestamps in archive
 headers do not affect source verification.

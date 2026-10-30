@@ -4,12 +4,21 @@
 (define-module (bitcoin android-d8)
   #:use-module (gnu packages bash)
   #:use-module (gnu packages java)
+  #:use-module (bitcoin android-host-jdk)
   #:use-module (guix build-system gnu)
   #:use-module (guix download)
   #:use-module (guix gexp)
   #:use-module (guix git-download)
   #:use-module ((guix licenses) #:prefix license:)
   #:use-module (guix packages))
+
+;; Keep the Java libraries' implicit Ant/bootstrap JDKs headless too.  Use the
+;; same packages in the generated launcher, whose classpath is a direct gexp.
+(define java-asm-for-d8 (android-headless-package java-asm))
+(define java-guava-for-d8 (android-headless-package java-guava))
+(define java-failureaccess-for-d8
+  (android-headless-package java-guava-futures-failureaccess))
+(define java-jopt-simple-for-d8 (android-headless-package java-jopt-simple-4))
 
 ;; These are archives of Java SOURCE, not binary Maven libraries. Compiling the
 ;; published source directly avoids Ivy/Maven downloads and generator toolchains.
@@ -67,7 +76,7 @@
                                               "/share/java")))
                 (mkdir-p directory)
                 (copy-file "library.jar" (string-append directory "/" #$jar-name))))))))
-    (native-inputs (list (list openjdk17 "jdk")))
+    (native-inputs (list (list android-openjdk17 "jdk")))
     (home-page uri)
     (synopsis "Java library compiled from its published source archive")
     (description
@@ -99,6 +108,20 @@ class Smoke { public static void main(String[] args) throws Exception {
   if (((java.util.List) value).size() != 2) throw new AssertionError();
 } }"))
 
+(define %d8-libraries
+  (list java-asm-for-d8 java-guava-for-d8 java-failureaccess-for-d8
+        java-jopt-simple-for-d8 java-fastutil-for-d8 java-json-simple-for-d8))
+
+(define %d8-library-jars
+  #~(append-map
+     (lambda (library)
+       ;; Guix Java packages can use either share/java or lib/m2.
+       (let ((jars (sort (find-files library "\\.jar$") string<?)))
+         (when (null? jars)
+           (error "D8 library has no installed JAR" library))
+         jars))
+     (list #$@%d8-libraries)))
+
 (define-public android-d8
   (let ((commit "1a02d973acbb3efb83477a3d0c7e784b6946e648"))
     (package
@@ -119,6 +142,7 @@ class Smoke { public static void main(String[] args) throws Exception {
        (list
         #:modules '((guix build gnu-build-system)
                     (guix build utils)
+                    (srfi srfi-1)
                     (srfi srfi-13))
         #:phases
         #~(modify-phases %standard-phases
@@ -130,14 +154,7 @@ class Smoke { public static void main(String[] args) throws Exception {
                 (setenv "CLASSPATH"
                         (string-append
                          (getcwd) "/classes:"
-                         (string-join
-                          (list #$(file-append java-asm "/share/java/*")
-                                #$(file-append java-guava "/share/java/*")
-                                #$(file-append java-guava-futures-failureaccess "/share/java/*")
-                                #$(file-append java-jopt-simple-4 "/share/java/*")
-                                #$(file-append java-fastutil-for-d8 "/share/java/*")
-                                #$(file-append java-json-simple-for-d8 "/share/java/*"))
-                          ":")))
+                         (string-join #$%d8-library-jars ":")))
                 (mkdir "classes")
                 (apply invoke "javac" "-J-Xmx2G" "--release" "8"
                        "-encoding" "UTF-8" "-d" "classes"
@@ -203,13 +220,8 @@ class CheckDex {
                        (bin (string-append out "/bin"))
                        (classpath
                         (string-join
-                         (list (string-append out "/share/java/d8.jar")
-                               #$(file-append java-asm "/share/java/*")
-                               #$(file-append java-guava "/share/java/*")
-                               #$(file-append java-guava-futures-failureaccess "/share/java/*")
-                               #$(file-append java-jopt-simple-4 "/share/java/*")
-                               #$(file-append java-fastutil-for-d8 "/share/java/*")
-                               #$(file-append java-json-simple-for-d8 "/share/java/*"))
+                         (cons (string-append out "/share/java/d8.jar")
+                               #$%d8-library-jars)
                          ":")))
                   (install-file "d8.jar" (string-append out "/share/java"))
                   (mkdir-p bin)
@@ -217,13 +229,11 @@ class CheckDex {
                     (lambda (port)
                       (format port "#!~a~%exec ~a -cp \"~a\" com.android.tools.r8.D8 \"$@\"~%"
                               #$(file-append bash-minimal "/bin/bash")
-                              #$(file-append openjdk17 "/bin/java") classpath)))
+                              #$(file-append android-openjdk17 "/bin/java") classpath)))
                   (chmod (string-append bin "/d8") #o755)))))))
-      (native-inputs (list (list openjdk17 "jdk")))
+      (native-inputs (list (list android-openjdk17 "jdk")))
       (inputs
-       (list bash-minimal openjdk17 java-asm java-guava
-             java-guava-futures-failureaccess java-jopt-simple-4
-             java-fastutil-for-d8 java-json-simple-for-d8))
+       (cons* bash-minimal android-openjdk17 %d8-libraries))
       (home-page "https://r8.googlesource.com/r8/")
       (synopsis "Source-built Java 8 to Android DEX compiler")
       (description

@@ -1,0 +1,486 @@
+Build only the source-bootstrap Java tools and their genuine support APIs.
+
+The package is not a desktop JDK. Omit native desktop compilation, its unused
+code/data generators, and development-library probes under one matching mode.
+Normal upstream builds retain their existing behavior.
+
+--- a/Makefile.am
++++ b/Makefile.am
+@@ -444,6 +444,7 @@
+ 	LD_LIBRARY_PATH=""
+ 
+ ICEDTEA_CONFIGURE = \
++	  --enable-build-tools-only=$(BUILD_TOOLS_ONLY) \
+ 	  --build=$(build_triplet) \
+ 	  --host=$(host_triplet) \
+ 	  --enable-unlimited-crypto \
+--- a/acinclude.m4
++++ b/acinclude.m4
+@@ -2561,12 +2561,14 @@
+ 
+ AC_DEFUN_ONCE([IT_CHECK_FOR_FREETYPE],
+ [
++if test "x$enable_build_tools_only" != xyes; then
+ dnl Check for freetype2 headers and libraries.
+   PKG_CHECK_MODULES(FREETYPE2, freetype2,[]
+ 	  ,[AC_MSG_ERROR([Could not find freetype2 - \
+   Try installing freetype2-devel.])])
+   AC_SUBST(FREETYPE2_CFLAGS)
+   AC_SUBST(FREETYPE2_LIBS)
++fi
+ ])
+ 
+ AC_DEFUN_ONCE([IT_ENABLE_NASHORN_CHECKSUM],
+--- a/configure.ac
++++ b/configure.ac
+@@ -1,4 +1,23 @@
+ AC_INIT([icedtea], [3.19.0], [distro-pkg-dev@openjdk.java.net])
++
++# This package is used only for source bootstrapping Java build tools.  The
++# matching OpenJDK make selection retains Java support APIs but omits native
++# desktop components, so their development libraries are not dependencies.
++AC_ARG_ENABLE([build-tools-only],
++  [AS_HELP_STRING([--enable-build-tools-only], [build Java tools without native desktop components])],
++  [case "$enableval" in yes|no) ;; *) AC_MSG_ERROR([expected yes or no for build-tools-only]);; esac],
++  [enable_build_tools_only=no])
++AC_SUBST([BUILD_TOOLS_ONLY], [$enable_build_tools_only])
++if test "x$enable_build_tools_only" = xyes; then
++  enable_docs=no
++  enable_system_jpeg=no
++  enable_system_png=no
++  enable_system_gif=no
++  enable_system_lcms=no
++  enable_system_gtk=no
++  enable_system_fontconfig=no
++  enable_system_cups=no
++fi
+ AC_CANONICAL_HOST
+ AC_CANONICAL_TARGET
+ AM_INIT_AUTOMAKE([1.9 tar-pax foreign])
+@@ -159,12 +178,16 @@
+ IT_WITH_HG_REVISION
+ 
+ dnl pkgconfig cannot be used to find these headers and libraries.
++if test "x$enable_build_tools_only" != xyes; then
+ AC_CHECK_HEADERS([cups/cups.h cups/ppd.h],[]
+ 	,[AC_MSG_ERROR("CUPS headers were not found -
+-	try installing cups-devel.")])
++	try installing cups-devel.")])fi
++
++if test "x$enable_build_tools_only" != xyes; then
+ AC_CHECK_HEADERS([X11/X.h],[]
+ 	,[AC_MSG_ERROR("xorg headers were not found -
+ 	try installing xorg-x11-proto-devel.")])
++fi
+ 
+ IT_CHECK_FOR_ZLIB
+ IT_CHECK_FOR_JPEG
+@@ -177,6 +200,7 @@
+ IT_ENABLE_IMPROVED_FONT_RENDERING
+ AC_CONFIG_FILES([remove-intree-libraries.sh])
+ 
++if test "x$enable_build_tools_only" != xyes; then
+ dnl Check for Xproto headers and libraries.
+ PKG_CHECK_MODULES(XPROTO, xproto,[XPROTO_FOUND=yes],[XPROTO_FOUND=no])
+ if test "x${XPROTO_FOUND}" = xno
+@@ -231,6 +255,8 @@
+ fi
+ AC_SUBST(XCOMPOSITE_CFLAGS)
+ AC_SUBST(XCOMPOSITE_LIBS)
++
++fi
+ 
+ AC_CHECK_HEADER([sys/sdt.h], [SDT_H_FOUND='yes'],
+                 [SDT_H_FOUND='no';
+@@ -291,6 +317,7 @@
+ AC_CONFIG_FILES([tapset/hotspot_gc.stp])
+ AC_CONFIG_FILES([test/tapset/jstaptest.pl])
+ 
++if test "x$enable_build_tools_only" != xyes; then
+ dnl Check for libXtst headers and libraries.
+ PKG_CHECK_MODULES(XTST, xtst,[XTST_FOUND=yes],[XTST_FOUND=no])
+ if test "x${XTST_FOUND}" = xno
+@@ -312,6 +339,8 @@
+   fi
+ AC_SUBST(ALSA_CFLAGS)
+ AC_SUBST(ALSA_LIBS)
++fi
++
+ fi
+ 
+ if test "x${ZERO_BUILD_TRUE}" = x || test "x${ADD_ZERO_BUILD_TRUE}" = x; then
+--- a/openjdk.src/jdk/make/CompileJavaClasses.gmk
++++ b/openjdk.src/jdk/make/CompileJavaClasses.gmk
+@@ -166,6 +166,25 @@
+     sun/text/resources/BreakIteratorRules_th.java
+ 
+ # TODO: Add BUILD_HEADLESS_ONLY to configure?
++ifeq ($(BUILD_TOOLS_ONLY),yes)
++  EXCLUDES += sun/awt/X11 sun/awt/motif sun/java2d/x11 sun/java2d/xr \
++      sun/java2d/jules com/sun/java/swing/plaf/gtk \
++      javax/swing/plaf/nimbus com/sun/java/swing/plaf/nimbus \
++      javax/swing/beaninfo sun/tools/jconsole com/sun/tools/jconsole \
++      sun/security/tools/policytool
++  EXFILES += sun/awt/UNIXToolkit.java sun/awt/FcFontManager.java \
++      sun/awt/X11ComponentPeer.java sun/awt/X11CustomCursor.java \
++      sun/awt/X11FontManager.java sun/awt/X11GraphicsConfig.java \
++      sun/awt/X11GraphicsDevice.java sun/awt/X11GraphicsEnvironment.java \
++      sun/awt/X11InputMethod.java sun/awt/X11InputMethodDescriptor.java \
++      sun/font/FcFontConfiguration.java sun/font/X11TextRenderer.java \
++      sun/font/XRGlyphCache.java sun/font/XRTextRenderer.java \
++      sun/java2d/UnixSurfaceManagerFactory.java \
++      sun/java2d/opengl/GLXGraphicsConfig.java \
++      sun/java2d/opengl/GLXSurfaceData.java \
++      sun/java2d/opengl/GLXVolatileSurfaceManager.java
++endif
++
+ ifdef BUILD_HEADLESS_ONLY
+   EXCLUDES += sun/applet
+ endif
+@@ -336,7 +355,7 @@
+         $(AIX_SRC_DIRS) \
+         $(LINUX_SRC_DIRS) \
+         $(JDK_OUTPUTDIR)/gensrc \
+-        $(JDK_OUTPUTDIR)/gensrc_no_srczip \
++        $(if $(filter yes,$(BUILD_TOOLS_ONLY)),,$(JDK_OUTPUTDIR)/gensrc_no_srczip) \
+         $(CLOSED_SRC_DIRS),\
+     INCLUDES:=$(JDK_USER_DEFINED_FILTER),\
+     EXCLUDES:=$(EXCLUDES) $(SECURITY_PKGS),\
+--- a/openjdk.src/jdk/make/CompileLaunchers.gmk
++++ b/openjdk.src/jdk/make/CompileLaunchers.gmk
+@@ -316,9 +316,11 @@
+ BUILD_LAUNCHER_jconsole_CFLAGS_windows := -DJAVAW
+ BUILD_LAUNCHER_jconsole_LDFLAGS_windows := user32.lib
+ 
++ifneq ($(BUILD_TOOLS_ONLY),yes)
+ $(eval $(call SetupLauncher,jconsole, \
+     -DJAVA_ARGS='{ "-J-ms8m"$(COMMA) "-J-Djconsole.showOutputViewer"$(COMMA) "sun.tools.jconsole.JConsole"$(COMMA) }' \
+     -DAPP_CLASSPATH='{ "/lib/jconsole.jar"$(COMMA) "/lib/tools.jar"$(COMMA) "/classes" }'))
++endif
+ 
+ $(eval $(call SetupLauncher,jdb, \
+     -DJAVA_ARGS='{ "-J-ms8m"$(COMMA) "com.sun.tools.example.debug.tty.TTY"$(COMMA) }' \
+@@ -355,9 +357,12 @@
+ $(eval $(call SetupLauncher,jrunscript, \
+     -DJAVA_ARGS='{ "-J-ms8m"$(COMMA) "com.sun.tools.script.shell.Main"$(COMMA) }'))
+ 
++ifneq ($(BUILD_TOOLS_ONLY),yes)
+ $(eval $(call SetupLauncher,jjs, \
+     -DJAVA_ARGS='{ "-J-ms8m"$(COMMA) "jdk.nashorn.tools.Shell"$(COMMA) }'))
+-
++endif
++
++ifeq ($(INCLUDE_SA), true)
+ $(eval $(call SetupLauncher,jsadebugd, \
+     -DJAVA_ARGS='{ "-J-ms8m"$(COMMA) "sun.jvm.hotspot.jdi.SADebugServer"$(COMMA) }' \
+     -DAPP_CLASSPATH='{ "/lib/tools.jar"$(COMMA) "/lib/sa-jdi.jar"$(COMMA) "/classes" }' \
+@@ -372,6 +377,7 @@
+     -DJAVA_ARGS='{ "-J-ms8m"$(COMMA) "sun.jvm.hotspot.CLHSDB"$(COMMA) }' \
+     -DAPP_CLASSPATH='{ "/lib/tools.jar"$(COMMA) "/lib/sa-jdi.jar"$(COMMA) "/classes" }' \
+     ,,,,,,,,,Info-privileged.plist))
++endif
+ 
+ $(eval $(call SetupLauncher,jstack, \
+     -DJAVA_ARGS='{ "-J-ms8m"$(COMMA) \
+--- a/openjdk.src/jdk/make/CompileNativeLibraries.gmk
++++ b/openjdk.src/jdk/make/CompileNativeLibraries.gmk
+@@ -89,9 +89,11 @@
+ 
+ include lib/ServiceabilityLibraries.gmk
+ 
++ifneq ($(BUILD_TOOLS_ONLY),yes)
+ include lib/Awt2dLibraries.gmk
+ 
+ include lib/SoundLibraries.gmk
++endif
+ 
+ # Include the corresponding custom file, if present. 
+ -include $(CUSTOM_MAKE_DIR)/CompileNativeLibraries.gmk
+--- a/openjdk.src/jdk/make/CreateJars.gmk
++++ b/openjdk.src/jdk/make/CreateJars.gmk
+@@ -52,6 +52,7 @@
+ 
+ ##########################################################################################
+ 
++ifneq ($(BUILD_TOOLS_ONLY),yes)
+ $(eval $(call SetupArchive,BUILD_JCONSOLE_JAR, , \
+     SRCS := $(JDK_OUTPUTDIR)/classes, \
+     SUFFIXES := .class .gif .png .properties, \
+@@ -59,6 +60,7 @@
+     JARMAIN := sun.tools.jconsole.JConsole, \
+     JAR := $(IMAGES_OUTPUTDIR)/lib/jconsole.jar, \
+     SKIP_METAINF := true))
++endif
+ 
+ 
+ ##########################################################################################
+@@ -376,6 +378,7 @@
+ 
+ ##########################################################################################
+ 
++ifneq ($(BUILD_TOOLS_ONLY),yes)
+ ifneq ($(OPENJDK_TARGET_OS), windows)
+   CHARSETS_EXTRA_FILES := sun/awt/motif/X11GBK.class \
+       sun/awt/motif/X11GB2312\$$$$Decoder.class \
+@@ -385,6 +388,7 @@
+       sun/awt/motif/X11GB2312\$$$$Encoder.class \
+       sun/awt/motif/X11GBK\$$$$Encoder.class \
+       sun/awt/motif/X11KSC5601.class
++endif
+ endif
+ 
+ $(eval $(call SetupArchive,BUILD_CHARSETS_JAR, , \
+@@ -427,6 +431,7 @@
+ 
+ ##########################################################################################
+ 
++ifneq ($(BUILD_TOOLS_ONLY),yes)
+ $(eval $(call SetupArchive,BUILD_SWINGBEANS_JAR, , \
+     SRCS := $(JDK_OUTPUTDIR)/classes, \
+     SUFFIXES := BeanInfo.class .gif, \
+@@ -435,6 +440,7 @@
+     EXTRA_FILES := javax/swing/SwingBeanInfoBase.class sun/swing/BeanInfoUtils.class, \
+     JAR := $(IMAGES_OUTPUTDIR)/lib/dt.jar, \
+     SKIP_METAINF := true))
++endif
+ 
+ ##########################################################################################
+ 
+@@ -787,8 +793,10 @@
+ ##########################################################################################
+ 
+ # Import nashorn.jar from nashorn dist dir.
++ifneq ($(BUILD_TOOLS_ONLY),yes)
+ $(IMAGES_OUTPUTDIR)/lib/ext/nashorn.jar: $(NASHORN_DIST)/nashorn.jar
+ 	$(install-file)
++endif
+ 
+ ##########################################################################################
+ 
+--- a/openjdk.src/jdk/make/GenerateData.gmk
++++ b/openjdk.src/jdk/make/GenerateData.gmk
+@@ -41,14 +41,18 @@
+ include gendata/GendataBreakIterator.gmk
+ GENDATA += $(BREAK_ITERATOR)
+ 
++ifneq ($(BUILD_TOOLS_ONLY),yes)
+ include gendata/GendataFontConfig.gmk
+ GENDATA += $(GENDATA_FONT_CONFIG)
++endif
+ 
+ include gendata/GendataTZDB.gmk
+ GENDATA += $(GENDATA_TZDB)
+ 
++ifneq ($(BUILD_TOOLS_ONLY),yes)
+ include gendata/GendataHtml32dtd.gmk
+ GENDATA += $(GENDATA_HTML32DTD)
++endif
+ 
+ ##########################################################################################
+ 
+--- a/openjdk.src/jdk/make/GenerateSources.gmk
++++ b/openjdk.src/jdk/make/GenerateSources.gmk
+@@ -65,6 +65,7 @@
+ include gensrc/GensrcExceptions.gmk
+ GENSRC += $(GENSRC_EXCEPTIONS)
+ 
++ifneq ($(BUILD_TOOLS_ONLY),yes)
+ ifneq ($(OPENJDK_TARGET_OS), windows)
+   include gensrc/GensrcIcons.gmk
+   GENSRC += $(GENSRC_AWT_ICONS)
+@@ -79,11 +80,15 @@
+   endif
+ endif
+ 
++endif
++
+ include gensrc/GensrcCLDR.gmk
+ GENSRC += $(GENSRC_CLDR)
+ 
++ifneq ($(BUILD_TOOLS_ONLY),yes)
+ include gensrc/GensrcSwing.gmk
+ GENSRC += $(GENSRC_SWING_BEANINFO) $(GENSRC_SWING_NIMBUS)
++endif
+ 
+ $(GENSRC): $(BUILD_TOOLS)
+ 
+--- a/openjdk.src/jdk/make/Profiles.gmk
++++ b/openjdk.src/jdk/make/Profiles.gmk
+@@ -70,6 +70,10 @@
+ 
+ ifneq ($(ENABLE_JFR), true)
+   FULL_JRE_JAR_FILES := $(filter-out jfr.jar, $(FULL_JRE_JAR_FILES))
++endif
++
++ifeq ($(BUILD_TOOLS_ONLY),yes)
++FULL_JRE_JAR_FILES := $(filter-out ext/nashorn.jar,$(FULL_JRE_JAR_FILES))
+ endif
+ 
+ FULL_JRE_JARS := \
+@@ -89,6 +93,11 @@
+     $(IMAGES_OUTPUTDIR)/lib/tools.jar \
+     $(IMAGES_OUTPUTDIR)/lib/ct.sym \
+     $(IMAGES_OUTPUTDIR)/src.zip
++
++ifeq ($(BUILD_TOOLS_ONLY),yes)
++ALL_JARS := $(filter-out $(IMAGES_OUTPUTDIR)/lib/jconsole.jar \
++    $(IMAGES_OUTPUTDIR)/lib/dt.jar,$(ALL_JARS))
++endif
+ 
+ ifeq ($(INCLUDE_SA), true)
+   ALL_JARS += $(IMAGES_OUTPUTDIR)/lib/sa-jdi.jar
+--- a/openjdk.src/jdk/make/Tools.gmk
++++ b/openjdk.src/jdk/make/Tools.gmk
+@@ -28,8 +28,11 @@
+ 
+ TOOLS_SRC := $(JDK_TOPDIR)/make/src/classes
+ 
++ifneq ($(BUILD_TOOLS_ONLY),yes)
+ ifeq ($(findstring $(OPENJDK_TARGET_OS),windows macosx),)
+   TOOLS_SRC += $(JDK_TOPDIR)/src/solaris/classes/sun/awt/X11/generator
++endif
++
+ endif
+ 
+ # The exception handling of swing beaninfo which have the own tool directory
+@@ -37,6 +40,10 @@
+   $(eval $(call SetupJavaCompilation,BUILD_TOOLS, \
+       SETUP := GENERATE_OLDBYTECODE, \
+       SRC := $(TOOLS_SRC), \
++      EXCLUDES := $(if $(filter yes,$(BUILD_TOOLS_ONLY)), \
++          build/tools/compilefontconfig build/tools/dtdbuilder \
++          build/tools/generatenimbus build/tools/swingbeaninfo \
++          build/tools/icondata/awt), \
+       BIN := $(JDK_OUTPUTDIR)/btclasses))
+ endif
+ 
+--- a/openjdk.src/common/autoconf/autogen.sh
++++ b/openjdk.src/common/autoconf/autogen.sh
+@@ -41,16 +41,8 @@
+ 
+ script_dir=`dirname $0`
+ 
+-# Create a timestamp as seconds since epoch
+-if test "x`uname -s`" = "xSunOS"; then
+-  TIMESTAMP=`date +%s`
+-  if test "x$TIMESTAMP" = "x%s"; then
+-    # date +%s not available on this Solaris, use workaround from nawk(1):
+-    TIMESTAMP=`nawk 'BEGIN{print srand()}'`
+-  fi
+-else
+-  TIMESTAMP=`date +%s`
+-fi
++# Guix supplies SOURCE_DATE_EPOCH; configure generation must not record the clock.
++TIMESTAMP=${SOURCE_DATE_EPOCH:-0}
+ 
+ if test "x$CUSTOM_CONFIG_DIR" = "x"; then
+   topdir=`cd $script_dir/../..  >/dev/null && pwd`
+--- a/openjdk.src/common/autoconf/libraries.m4
++++ b/openjdk.src/common/autoconf/libraries.m4
+@@ -25,6 +25,21 @@
+ 
+ AC_DEFUN_ONCE([LIB_SETUP_INIT],
+ [
++  AC_ARG_ENABLE([build-tools-only],
++    [AS_HELP_STRING([--enable-build-tools-only], [build Java tools without native desktop components])],
++    [case "$enableval" in yes|no) ;; *) AC_MSG_ERROR([expected yes or no for build-tools-only]);; esac],
++    [enable_build_tools_only=no])
++  BUILD_TOOLS_ONLY=$enable_build_tools_only
++  AC_SUBST(BUILD_TOOLS_ONLY)
++  if test "x$BUILD_TOOLS_ONLY" = xyes; then
++    INCLUDE_SA=false
++    CUPS_NOT_NEEDED=yes
++    ALSA_NOT_NEEDED=yes
++    PULSE_NOT_NEEDED=yes
++    X11_NOT_NEEDED=yes
++    FONTCONFIG_NOT_NEEDED=yes
++    FREETYPE_NOT_NEEDED=yes
++  fi
+ 
+   ###############################################################################
+   #
+--- a/openjdk.src/common/autoconf/spec.gmk.in
++++ b/openjdk.src/common/autoconf/spec.gmk.in
+@@ -767,3 +767,6 @@
+ 
+ # Include the custom-spec.gmk file if it exists
+ -include $(dir @SPEC@)/custom-spec.gmk
++
++# Native desktop components are not part of the source-bootstrap tools.
++BUILD_TOOLS_ONLY := @BUILD_TOOLS_ONLY@
+--- a/openjdk.src/make/Main.gmk
++++ b/openjdk.src/make/Main.gmk
+@@ -131,7 +131,16 @@
+ 
+ # Note: This double-colon rule is intentional, to support
+ # custom make file integration.
++ifeq ($(BUILD_TOOLS_ONLY),yes)
++# zipfs is shipped as a core provider, although its source lives under demo/.
++# Build that exact existing target without building applet/Swing/native demos.
++tools-zipfs: jdk
++	@($(CD) $(JDK_TOPDIR)/make && $(BUILD_LOG_WRAPPER) $(MAKE) $(MAKE_ARGS) -f CompileDemos.gmk $(JDK_OUTPUTDIR)/demo/nio/zipfs/zipfs.jar)
++images:: source-tips tools-zipfs images-only
++images-only: tools-zipfs
++else
+ images:: source-tips demos nashorn images-only
++endif
+ images-only: start-make
+ 	@$(call TargetEnter)
+ 	@($(CD) $(JDK_TOPDIR)/make && $(BUILD_LOG_WRAPPER) $(MAKE) $(MAKE_ARGS) -f BuildJdk.gmk images)
+--- a/openjdk.src/hotspot/make/linux/makefiles/defs.make
++++ b/openjdk.src/hotspot/make/linux/makefiles/defs.make
+@@ -331,6 +331,8 @@
+ 
+ -include $(HS_ALT_MAKE)/linux/makefiles/defs.make
+ 
++ifneq ($(BUILD_TOOLS_ONLY),yes)
+ EXPORT_LIST += $(ADD_SA_BINARIES/$(HS_ARCH))
+-
+-
++endif
++
++
+--- a/openjdk.src/hotspot/make/linux/makefiles/sa.make
++++ b/openjdk.src/hotspot/make/linux/makefiles/sa.make
+@@ -61,10 +61,12 @@
+ # also, we don't build SA on Itanium or zero.
+ 
+ all: 
++ifneq ($(BUILD_TOOLS_ONLY),yes)
+ 	if [ -d $(AGENT_DIR) -a "$(SRCARCH)" != "ia64" \
+              -a "$(SRCARCH)" != "zero" ] ; then \
+ 	   $(MAKE) -f sa.make $(GENERATED)/sa-jdi.jar; \
+ 	fi
++endif
+ 
+ $(GENERATED)/sa-jdi.jar:: $(AGENT_FILES)
+ 	$(QUIETLY) echo "Making $@"
+--- a/openjdk.src/hotspot/make/linux/makefiles/saproc.make
++++ b/openjdk.src/hotspot/make/linux/makefiles/saproc.make
+@@ -67,9 +67,11 @@
+ # if $(AGENT_DIR) does not exist, we don't build SA
+ # also, we don't build SA on Itanium or zero.
+ 
++ifneq ($(BUILD_TOOLS_ONLY),yes)
+ ifneq ($(wildcard $(AGENT_DIR)),)
+ ifneq ($(filter-out ia64 zero,$(SRCARCH)),)
+   BUILDLIBSAPROC = $(LIBSAPROC)
++endif
+ endif
+ endif
+ 
+@@ -126,6 +128,7 @@
+ endif
+ 
+ install_saproc: $(BUILDLIBSAPROC)
++ifneq ($(BUILD_TOOLS_ONLY),yes)
+ 	$(QUIETLY) if [ -e $(LIBSAPROC) ] ; then             \
+ 	  echo "Copying $(LIBSAPROC) to $(DEST_SAPROC)";     \
+ 	  test -f $(LIBSAPROC_DEBUGINFO) &&                  \
+@@ -134,5 +137,6 @@
+ 	    cp -f $(LIBSAPROC_DIZ) $(DEST_SAPROC_DIZ); \
+ 	  cp -f $(LIBSAPROC) $(DEST_SAPROC) && echo "Done";  \
+ 	fi
++endif
+ 
+ .PHONY: install_saproc

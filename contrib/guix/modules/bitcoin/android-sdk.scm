@@ -2,7 +2,7 @@
 ;;; Distributed under the MIT software license, see the accompanying file COPYING.
 
 (define-module (bitcoin android-sdk)
-  #:use-module (gnu packages java)
+  #:use-module (bitcoin android-host-jdk)
   #:use-module (gnu packages python)
   #:use-module (guix build-system gnu)
   #:use-module (guix download)
@@ -105,7 +105,7 @@
                     (display "Pkg.Desc=Bitcoin Knots source-generated Android API 36\nAndroidVersion.ApiLevel=36\nPkg.Revision=1\n" port)))))))))
     (native-inputs
      (list (list "python" python-minimal)
-           (list "openjdk" openjdk17 "jdk")
+           (list "openjdk" android-openjdk17 "jdk")
            (list "lambda-stub-source" lambda-stub-source)))
     (home-page "https://android.googlesource.com/platform/prebuilts/sdk/")
     (synopsis "Android 36 compile-time API generated from signature source")

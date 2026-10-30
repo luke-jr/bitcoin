@@ -1,0 +1,473 @@
+Build only the source-bootstrap Java tools and their genuine support APIs.
+
+The package is not a desktop JDK. Omit native desktop compilation, its unused
+code/data generators, and development-library probes under one matching mode.
+Normal upstream builds retain their existing behavior.
+
+--- a/Makefile.am
++++ b/Makefile.am
+@@ -584,6 +584,7 @@
+ 	OS=
+ 
+ ICEDTEA_ENV = \
++	BUILD_TOOLS_ONLY="$(BUILD_TOOLS_ONLY)" \
+ 	ALT_JDK_IMPORT_PATH="$(BOOT_DIR)" \
+ 	ANT="$(ANT)" \
+         BUILD_NUMBER="$(BUILD_VERSION)" \
+--- a/acinclude.m4
++++ b/acinclude.m4
+@@ -2211,9 +2211,11 @@
+ 
+ AC_DEFUN_ONCE([IT_CHECK_FOR_CUPS],
+ [
++  if test "x$enable_build_tools_only" != xyes; then
+   dnl The CUPS headers are always required
+   AC_CHECK_HEADERS([cups/cups.h cups/ppd.h],
+       , [AC_MSG_ERROR([Could not find CUPS headers; install CUPS (including cups-devel on binary distros).])])
++  fi
+   AC_MSG_CHECKING([whether to use the system CUPS install])
+   AC_ARG_ENABLE([system-cups],
+ 	      [AS_HELP_STRING(--enable-system-cups,use the system CUPS [[default=yes]])],
+@@ -3382,12 +3384,14 @@
+ 
+ AC_DEFUN_ONCE([IT_CHECK_FOR_FREETYPE],
+ [
++if test "x$enable_build_tools_only" != xyes; then
+ dnl Check for freetype2 headers and libraries.
+   PKG_CHECK_MODULES(FREETYPE2, freetype2,[]
+ 	  ,[AC_MSG_ERROR([Could not find freetype2 - \
+   Try installing freetype2-devel.])])
+   AC_SUBST(FREETYPE2_CFLAGS)
+   AC_SUBST(FREETYPE2_LIBS)
++fi
+ ])
+ 
+ AC_DEFUN_ONCE([IT_CHECK_FOR_MIME_TYPES],
+--- a/configure.ac
++++ b/configure.ac
+@@ -1,4 +1,25 @@
+ AC_INIT([icedtea], [2.6.13], [distro-pkg-dev@openjdk.java.net])
++
++# This package is used only for source bootstrapping Java build tools.  The
++# matching OpenJDK make selection retains Java support APIs but omits native
++# desktop components, so their development libraries are not dependencies.
++AC_ARG_ENABLE([build-tools-only],
++  [AS_HELP_STRING([--enable-build-tools-only], [build Java tools without native desktop components])],
++  [case "$enableval" in yes|no) ;; *) AC_MSG_ERROR([expected yes or no for build-tools-only]);; esac],
++  [enable_build_tools_only=no])
++AC_SUBST([BUILD_TOOLS_ONLY], [$enable_build_tools_only])
++if test "x$enable_build_tools_only" = xyes; then
++  enable_docs=no
++  enable_system_jpeg=no
++  enable_system_png=no
++  enable_system_gif=no
++  enable_system_lcms=no
++  enable_system_gtk=no
++  enable_system_gio=no
++  enable_system_gconf=no
++  enable_system_fontconfig=no
++  enable_system_cups=no
++fi
+ AM_INIT_AUTOMAKE([1.9 tar-pax foreign])
+ AM_MAINTAINER_MODE([enable])
+ AC_CONFIG_FILES([Makefile])
+@@ -215,9 +236,11 @@
+ IT_CHECK_FOR_KERBEROS
+ 
+ dnl pkgconfig cannot be used to find these headers and libraries.
++if test "x$enable_build_tools_only" != xyes; then
+ AC_CHECK_HEADERS([X11/X.h],[]
+ 	,[AC_MSG_ERROR("xorg headers were not found -
+ 	try installing xorg-x11-proto-devel.")])
++fi
+ 
+ IT_CHECK_FOR_ZLIB
+ IT_CHECK_FOR_JPEG
+@@ -234,6 +257,7 @@
+ IT_CHECK_FOR_SCTP
+ AC_CONFIG_FILES([remove-intree-libraries.sh])
+ 
++if test "x$enable_build_tools_only" != xyes; then
+ dnl Check for Xproto headers and libraries.
+ PKG_CHECK_MODULES(XPROTO, xproto,[XPROTO_FOUND=yes],[XPROTO_FOUND=no])
+ if test "x${XPROTO_FOUND}" = xno
+@@ -288,6 +312,8 @@
+ fi
+ AC_SUBST(XCOMPOSITE_CFLAGS)
+ AC_SUBST(XCOMPOSITE_LIBS)
++
++fi
+ 
+ AC_CHECK_HEADER([sys/sdt.h], [SDT_H_FOUND='yes'],
+                 [SDT_H_FOUND='no';
+@@ -348,6 +374,7 @@
+ AC_CONFIG_FILES([tapset/hotspot_gc.stp])
+ AC_CONFIG_FILES([test/tapset/jstaptest.pl])
+ 
++if test "x$enable_build_tools_only" != xyes; then
+ dnl Check for libXtst headers and libraries.
+ PKG_CHECK_MODULES(XTST, xtst,[XTST_FOUND=yes],[XTST_FOUND=no])
+ if test "x${XTST_FOUND}" = xno
+@@ -369,6 +396,8 @@
+   fi
+ AC_SUBST(ALSA_CFLAGS)
+ AC_SUBST(ALSA_LIBS)
++fi
++
+ fi
+ 
+ if test "x${ZERO_BUILD_TRUE}" = x || test "x${ADD_ZERO_BUILD_TRUE}" = x; then
+--- a/patches/boot/demos.patch
++++ b/patches/boot/demos.patch
+@@ -1,32 +1,34 @@
+-diff -Nru openjdk.orig/jdk/make/common/Release.gmk openjdk/jdk/make/common/Release.gmk
+---- openjdk-boot.orig/jdk/make/common/Release.gmk	2012-06-11 14:24:46.531375308 +0100
+-+++ openjdk-boot/jdk/make/common/Release.gmk	2012-06-11 14:28:47.215136389 +0100
+-@@ -1104,16 +1104,6 @@
++--- openjdk-boot.orig/jdk/make/common/Release.gmk
+++++ openjdk-boot/jdk/make/common/Release.gmk
++@@ -1166,20 +1166,6 @@
+  	$(CP) $(FILES_launcher) $(JDK_IMAGE_DIR)/src/launcher
+  	$(CD) $(JDK_IMAGE_DIR)/src && $(ZIPEXE) -qr ../src.zip *
+  	$(RM) -r $(JDK_IMAGE_DIR)/src
+ -	@#
+ -	@# demo, include
+ -	@#
++-ifneq ($(BUILD_TOOLS_ONLY),yes)
+ -	$(CP) -r -f $(DEMODIR) $(JDK_IMAGE_DIR)
+ -	$(CP) -r -f $(SAMPLEDIR) $(JDK_IMAGE_DIR)
++-endif
+ -	$(CP) -r $(INCLUDEDIR) $(JDK_IMAGE_DIR)
+ -	@#
+ -	@# Swing BeanInfo generation
+ -	@#
++-ifneq ($(BUILD_TOOLS_ONLY),yes)
+ -	$(CD) javax/swing/beaninfo && $(MAKE) swing-1.2-beans
++-endif
+  ifneq ($(PLATFORM), windows)
+  	$(call copy-man-pages,$(JDK_IMAGE_DIR),$(JDK_MAN_PAGES))
+  endif # !windows
+-diff -Nru openjdk.orig/jdk/make/Makefile openjdk/jdk/make/Makefile
+---- openjdk-boot.orig/jdk/make/Makefile	2012-06-08 17:12:17.000000000 +0100
+-+++ openjdk-boot/jdk/make/Makefile	2012-06-11 14:28:47.223136515 +0100
++--- openjdk-boot.orig/jdk/make/Makefile
+++++ openjdk-boot/jdk/make/Makefile
+ @@ -240,7 +240,7 @@
+    SUBDIRS += bridge
+  endif
+  SUBDIRS_tools = launchers
+ -SUBDIRS_misc  = org sunw jpda mkdemo mksample
+ +SUBDIRS_misc  = org sunw jpda mksample
+- 
+- # Alternate classes implementation
+- ifndef OPENJDK
++ ifeq ($(BUILD_TOOLS_ONLY),yes)
++ SUBDIRS_misc := $(filter-out mkdemo mksample,$(SUBDIRS_misc))
++ endif
+--- a/openjdk.src/jdk/make/Makefile
++++ b/openjdk.src/jdk/make/Makefile
+@@ -241,6 +241,9 @@
+ endif
+ SUBDIRS_tools = launchers
+ SUBDIRS_misc  = org sunw jpda mkdemo mksample
++ifeq ($(BUILD_TOOLS_ONLY),yes)
++SUBDIRS_misc := $(filter-out mkdemo mksample,$(SUBDIRS_misc))
++endif
+ 
+ # Alternate classes implementation
+ ifndef OPENJDK
+--- a/openjdk.src/jdk/make/common/Defs-linux.gmk
++++ b/openjdk.src/jdk/make/common/Defs-linux.gmk
+@@ -518,6 +518,9 @@
+ else
+   INCLUDE_SA = true
+ endif
++ifeq ($(BUILD_TOOLS_ONLY),yes)
++  INCLUDE_SA = false
++endif
+ 
+ ifdef CROSS_COMPILE_ARCH
+   # X11 headers are not under /usr/include
+--- a/openjdk.src/jdk/make/common/Release.gmk
++++ b/openjdk.src/jdk/make/common/Release.gmk
+@@ -1169,13 +1169,17 @@
+ 	@#
+ 	@# demo, include
+ 	@#
++ifneq ($(BUILD_TOOLS_ONLY),yes)
+ 	$(CP) -r -f $(DEMODIR) $(JDK_IMAGE_DIR)
+ 	$(CP) -r -f $(SAMPLEDIR) $(JDK_IMAGE_DIR)
++endif
+ 	$(CP) -r $(INCLUDEDIR) $(JDK_IMAGE_DIR)
+ 	@#
+ 	@# Swing BeanInfo generation
+ 	@#
++ifneq ($(BUILD_TOOLS_ONLY),yes)
+ 	$(CD) javax/swing/beaninfo && $(MAKE) swing-1.2-beans
++endif
+ ifneq ($(PLATFORM), windows)
+ 	$(call copy-man-pages,$(JDK_IMAGE_DIR),$(JDK_MAN_PAGES))
+ endif # !windows
+--- a/openjdk.src/jdk/make/common/Sanity.gmk
++++ b/openjdk.src/jdk/make/common/Sanity.gmk
+@@ -83,7 +83,7 @@
+ sanity-all:: sanity-base \
+     sane-classpath \
+     sane-java_home \
+-    sane-fonts \
++    $(if $(filter yes,$(BUILD_TOOLS_ONLY)),,sane-fonts) \
+     sane-variant \
+     sane-ld_library_path \
+     sane-ld_library_path_64 \
+@@ -92,17 +92,17 @@
+     sane-alt_bootdir \
+     sane-bootdir \
+     sane-local-bootdir \
+-    sane-alsa-headers
++    $(if $(filter yes,$(BUILD_TOOLS_ONLY)),,sane-alsa-headers)
+ 
+ ifdef OPENJDK
+-sanity-all:: sane-freetype 
++sanity-all:: $(if $(filter yes,$(BUILD_TOOLS_ONLY)),,sane-freetype)
+ endif
+ 
+ 
+ # Always check cups header paths on solaris & linux
+ ifneq ($(PLATFORM), windows)
+ sanity-all:: \
+-    sane-cups
++    $(if $(filter yes,$(BUILD_TOOLS_ONLY)),,sane-cups)
+ endif
+ 
+ # Always check hotspot binary paths even if we are building them from scratch
+--- a/openjdk.src/jdk/make/javax/Makefile
++++ b/openjdk.src/jdk/make/javax/Makefile
+@@ -47,10 +47,17 @@
+         sound \
+         imageio
+ 
++ifeq ($(BUILD_TOOLS_ONLY),yes)
++SUBDIRS_desktop := $(filter-out sound,$(SUBDIRS_desktop))
++endif
++
+ include $(BUILDDIR)/common/Subdirs.gmk
+ 
+ all build:
+ 	$(SUBDIRS-loop)
++ifeq ($(BUILD_TOOLS_ONLY),yes)
++	$(MAKE) -C sound classes
++endif
+ clean clobber::
+ 	$(SUBDIRS-loop)
+ 
+--- a/openjdk.src/jdk/make/javax/swing/Makefile
++++ b/openjdk.src/jdk/make/javax/swing/Makefile
+@@ -37,6 +37,11 @@
+ AUTO_JAVA_PRUNE = plaf
+ 
+ SUBDIRS = html32dtd plaf
++ifeq ($(BUILD_TOOLS_ONLY),yes)
++# Nimbus/BeanInfo generation serves the GUI, not the bootstrap tools.
++SUBDIRS =
++AUTO_JAVA_PRUNE += nimbus gtk
++endif
+ 
+ include $(BUILDDIR)/common/Classes.gmk
+ include $(BUILDDIR)/common/Subdirs.gmk
+--- a/openjdk.src/jdk/make/launchers/Makefile
++++ b/openjdk.src/jdk/make/launchers/Makefile
+@@ -65,8 +65,9 @@
+ $(call make-launcher, javah, com.sun.tools.javah.Main, , )
+ $(call make-launcher, javap, com.sun.tools.javap.Main, , )
+ $(call make-launcher, jcmd, sun.tools.jcmd.JCmd, , )
+-$(call make-launcher, jconsole, sun.tools.jconsole.JConsole, \
+-  -J-Djconsole.showOutputViewer, )
++$(if $(filter yes,$(BUILD_TOOLS_ONLY)),,\
++  $(call make-launcher, jconsole, sun.tools.jconsole.JConsole, \
++    -J-Djconsole.showOutputViewer, ))
+ $(call make-launcher, jdb, com.sun.tools.example.debug.tty.TTY, , )
+ $(call make-launcher, jhat, com.sun.tools.hat.Main, , )
+ $(call make-launcher, jinfo, sun.tools.jinfo.JInfo, \
+@@ -77,7 +78,7 @@
+   -J-Dsun.jvm.hotspot.debugger.useWindbgDebugger, )
+ $(call make-launcher, jps, sun.tools.jps.Jps, , )
+ $(call make-launcher, jrunscript, com.sun.tools.script.shell.Main, , )
+-$(call make-launcher, jsadebugd, sun.jvm.hotspot.jdi.SADebugServer, , )
++$(if $(filter yes,$(BUILD_TOOLS_ONLY)),,$(call make-launcher, jsadebugd, sun.jvm.hotspot.jdi.SADebugServer, , ))
+ $(call make-launcher, jstack, sun.tools.jstack.JStack, \
+   -J-Dsun.jvm.hotspot.debugger.useProcDebugger \
+   -J-Dsun.jvm.hotspot.debugger.useWindbgDebugger, )
+--- a/openjdk.src/jdk/make/sun/Makefile
++++ b/openjdk.src/jdk/make/sun/Makefile
+@@ -96,8 +96,22 @@
+   SUBDIRS += usagetracker
+ endif
+ 
++ifeq ($(BUILD_TOOLS_ONLY),yes)
++# java.beans/logging/Ant need these real Java support classes.  Invoke their
++# existing classes targets, not build targets that link AWT/font libraries.
++SUBDIRS_desktop =
++SUBDIRS_tools := $(filter-out jconsole,$(SUBDIRS_tools))
++endif
++
+ include $(BUILDDIR)/common/Subdirs.gmk
+ 
+ all build clean clobber::
+ 	$(SUBDIRS-loop)
++ifeq ($(BUILD_TOOLS_ONLY),yes)
++	@if [ "$@" = all ] || [ "$@" = build ]; then \
++	  for dir in audio awt font beans; do \
++	    $(MAKE) -C $$dir classes || exit 1; \
++	  done; \
++	fi
++endif
+ 
+--- a/openjdk.src/jdk/make/sun/awt/Makefile
++++ b/openjdk.src/jdk/make/sun/awt/Makefile
+@@ -39,7 +39,9 @@
+ OTHER_CFLAGS += -D__MEDIALIB_OLD_NAMES -D__USE_J2D_NAMES
+ 
+ ifneq  ($(PLATFORM), windows)
++ifneq ($(BUILD_TOOLS_ONLY),yes)
+ CLASSES_INIT += $(TEMPDIR)/.gen_icons
++endif
+ endif
+ 
+ #
+@@ -53,6 +55,14 @@
+ #
+ AUTO_FILES_JAVA_DIRS = sun/awt sun/java2d com/sun/awt
+ AUTO_JAVA_PRUNE = resources pisces
++ifeq ($(BUILD_TOOLS_ONLY),yes)
++AUTO_JAVA_PRUNE += X11 motif x11 xr jules UNIXToolkit.java \
++    X11ComponentPeer.java X11CustomCursor.java X11FontManager.java \
++    X11GraphicsConfig.java X11GraphicsDevice.java X11GraphicsEnvironment.java \
++    X11InputMethod.java X11InputMethodDescriptor.java \
++    UnixSurfaceManagerFactory.java GLXGraphicsConfig.java GLXSurfaceData.java \
++    GLXVolatileSurfaceManager.java
++endif
+ 
+ ifeq ($(PLATFORM), windows)
+ # vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv WINDOWS
+--- a/openjdk.src/jdk/make/sun/font/Makefile
++++ b/openjdk.src/jdk/make/sun/font/Makefile
+@@ -51,6 +51,10 @@
+ include FILES_c.gmk
+ 
+ AUTO_FILES_JAVA_DIRS = sun/font
++ifeq ($(BUILD_TOOLS_ONLY),yes)
++AUTO_JAVA_PRUNE += X11TextRenderer.java XRGlyphCache.java XRTextRenderer.java \
++    FcFontConfiguration.java
++endif
+ FILES_java += java/awt/Font.java java/text/Bidi.java 
+ 
+ FILES_export = \
+--- a/openjdk.src/jdk/make/sun/security/tools/Makefile
++++ b/openjdk.src/jdk/make/sun/security/tools/Makefile
+@@ -32,6 +32,9 @@
+ # Files
+ #
+ AUTO_FILES_JAVA_DIRS = sun/security/tools
++ifeq ($(BUILD_TOOLS_ONLY),yes)
++AUTO_JAVA_PRUNE += policytool
++endif
+ 
+ #
+ # Resources
+--- a/openjdk.src/jdk/make/tools/Makefile
++++ b/openjdk.src/jdk/make/tools/Makefile
+@@ -71,6 +71,10 @@
+   SUBDIRS += add_gnu_debuglink fix_empty_sec_hdr_flags
+ endif
+ 
++ifeq ($(BUILD_TOOLS_ONLY),yes)
++SUBDIRS := $(filter-out compile_font_config dtdbuilder generate_nimbus,$(SUBDIRS))
++endif
++
+ include $(BUILDDIR)/common/Subdirs.gmk
+ 
+ all build clean clobber::
+--- a/openjdk.src/make/hotspot-rules.gmk
++++ b/openjdk.src/make/hotspot-rules.gmk
+@@ -86,6 +86,9 @@
+ endif
+ 
+ HOTSPOT_BUILD_ARGUMENTS += $(COMMON_BUILD_ARGUMENTS)
++ifneq ($(BUILD_TOOLS_ONLY),)
++  HOTSPOT_BUILD_ARGUMENTS += BUILD_TOOLS_ONLY=$(BUILD_TOOLS_ONLY)
++endif
+ HOTSPOT_BUILD_ARGUMENTS += ALT_OUTPUTDIR=$(HOTSPOT_OUTPUTDIR)
+ HOTSPOT_BUILD_ARGUMENTS += ALT_EXPORT_PATH=$(HOTSPOT_EXPORT_PATH)
+ HOTSPOT_BUILD_ARGUMENTS += BUILD_FLAVOR=$(BUILD_FLAVOR)
+--- a/openjdk.src/make/jdk-rules.gmk
++++ b/openjdk.src/make/jdk-rules.gmk
+@@ -70,6 +70,11 @@
+ JDK_BUILD_ARGUMENTS += \
+         BUILD_HOTSPOT=$(BUILD_HOTSPOT)
+ 
++# Keep component selection explicit across the forest's recursive make boundary.
++ifneq ($(BUILD_TOOLS_ONLY),)
++  JDK_BUILD_ARGUMENTS += BUILD_TOOLS_ONLY=$(BUILD_TOOLS_ONLY)
++endif
++
+ # Move to COMMON_BUILD_ARGUMENTS when all repos support
+ # FULL_DEBUG_SYMBOLS and ZIP_DEBUGINFO_FILES:
+ ifdef FULL_DEBUG_SYMBOLS
+--- a/openjdk.src/hotspot/make/linux/makefiles/defs.make
++++ b/openjdk.src/hotspot/make/linux/makefiles/defs.make
+@@ -352,6 +352,8 @@
+ 
+ -include $(HS_ALT_MAKE)/linux/makefiles/defs.make
+ 
++ifneq ($(BUILD_TOOLS_ONLY),yes)
+ EXPORT_LIST += $(ADD_SA_BINARIES/$(HS_ARCH))
+-
+-
++endif
++
++
+--- a/openjdk.src/hotspot/make/linux/makefiles/sa.make
++++ b/openjdk.src/hotspot/make/linux/makefiles/sa.make
+@@ -61,11 +61,13 @@
+ # also, we don't build SA on Itanium or zero.
+ 
+ all: 
++ifneq ($(BUILD_TOOLS_ONLY),yes)
+ 	if [ -d $(AGENT_DIR) -a "$(SRCARCH)" != "ia64" \
+              -a "$(SRCARCH)" != "zero"  \
+              -a "$(SRCARCH)" != "aarch64" ] ; then \
+ 	   $(MAKE) -f sa.make $(GENERATED)/sa-jdi.jar; \
+ 	fi
++endif
+ 
+ $(GENERATED)/sa-jdi.jar:: $(AGENT_FILES)
+ 	$(QUIETLY) echo "Making $@"
+--- a/openjdk.src/hotspot/make/linux/makefiles/saproc.make
++++ b/openjdk.src/hotspot/make/linux/makefiles/saproc.make
+@@ -66,9 +66,11 @@
+ # if $(AGENT_DIR) does not exist, we don't build SA
+ # also, we don't build SA on Itanium or zero.
+ 
++ifneq ($(BUILD_TOOLS_ONLY),yes)
+ ifneq ($(wildcard $(AGENT_DIR)),)
+ ifneq ($(filter-out ia64 zero aarch64,$(SRCARCH)),)
+   BUILDLIBSAPROC = $(LIBSAPROC)
++endif
+ endif
+ endif
+ 
+@@ -124,6 +126,7 @@
+ endif
+ 
+ install_saproc: $(BUILDLIBSAPROC)
++ifneq ($(BUILD_TOOLS_ONLY),yes)
+ 	$(QUIETLY) if [ -e $(LIBSAPROC) ] ; then             \
+ 	  echo "Copying $(LIBSAPROC) to $(DEST_SAPROC)";     \
+ 	  test -f $(LIBSAPROC_DEBUGINFO) &&                  \
+@@ -132,5 +135,6 @@
+ 	    cp -f $(LIBSAPROC_DIZ) $(DEST_SAPROC_DIZ); \
+ 	  cp -f $(LIBSAPROC) $(DEST_SAPROC) && echo "Done";  \
+ 	fi
++endif
+ 
+ .PHONY: install_saproc

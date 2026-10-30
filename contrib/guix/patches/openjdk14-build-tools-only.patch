@@ -1,0 +1,607 @@
+Build a source-selected Java command-line and bootstrap tool image.
+
+The explicit --enable-build-tools-only option omits desktop modules before
+Java/native compilation, skips their unused configure dependencies and omits
+their bootstrap generators. Normal builds are unchanged. HotSpot remains the
+selected upstream VM variant; no tests, cryptography or required APIs are stubbed.
+
+Backport OpenJDK JDK-8243666 so module hashes cover sorted resource names and
+contents, preserving valid hashes through deterministic archive normalization.
+Upstream: https://github.com/openjdk/jdk/commit/fe152cdcc5c6ef7e7f3f8c0acf065049e40ee2ea
+Author: Alan Bateman; reviewed by Mandy Chung. Includes the upstream regression
+test. ModuleHashes.java context is adapted from the older HashMap version;
+the upstream implementation and copyright notice are preserved.
+
+--- a/make/autoconf/libraries.m4
++++ b/make/autoconf/libraries.m4
+@@ -41,2 +41,16 @@
+ [
++  AC_ARG_ENABLE([build-tools-only],
++      [AS_HELP_STRING([--enable-build-tools-only],
++          [build only the modules needed by Java command-line and bootstrap tools])],
++      [case "$enable_build_tools_only" in
++         yes) BUILD_TOOLS_ONLY=true ;;
++         no) BUILD_TOOLS_ONLY=false ;;
++         *) AC_MSG_ERROR([--enable-build-tools-only accepts only yes or no]) ;;
++       esac],
++      [BUILD_TOOLS_ONLY=false])
++  AC_SUBST(BUILD_TOOLS_ONLY)
++  if test "x$BUILD_TOOLS_ONLY" = xtrue && test "x$ENABLE_HEADLESS_ONLY" != xtrue; then
++    AC_MSG_ERROR([--enable-build-tools-only requires --enable-headless-only])
++  fi
++
+   # Check if X11 is needed
+@@ -86,2 +100,11 @@
+     NEEDS_LIB_FFI=false
++  fi
++
++  # No java.desktop classes or native libraries are built in this mode.
++  if test "x$BUILD_TOOLS_ONLY" = xtrue; then
++    NEEDS_LIB_X11=false
++    NEEDS_LIB_CUPS=false
++    NEEDS_LIB_FONTCONFIG=false
++    NEEDS_LIB_FREETYPE=false
++    NEEDS_LIB_ALSA=false
+   fi
+--- a/make/autoconf/lib-bundled.m4
++++ b/make/autoconf/lib-bundled.m4
+@@ -49,2 +49,4 @@
+ [
++  # Guard the body: AC_DEFUN_ONCE can hoist a guarded macro call.
++  if test "x$BUILD_TOOLS_ONLY" != xtrue; then
+   AC_ARG_WITH(libjpeg, [AS_HELP_STRING([--with-libjpeg],
+@@ -75,2 +77,3 @@
+   AC_SUBST(USE_EXTERNAL_LIBJPEG)
++  fi
+ ])
+@@ -82,2 +85,4 @@
+ [
++  # Guard the body: AC_DEFUN_ONCE can hoist a guarded macro call.
++  if test "x$BUILD_TOOLS_ONLY" != xtrue; then
+   AC_ARG_WITH(giflib, [AS_HELP_STRING([--with-giflib],
+@@ -108,2 +113,3 @@
+   AC_SUBST(USE_EXTERNAL_LIBGIF)
++  fi
+ ])
+@@ -115,2 +121,4 @@
+ [
++  # Guard the body: AC_DEFUN_ONCE can hoist a guarded macro call.
++  if test "x$BUILD_TOOLS_ONLY" != xtrue; then
+   AC_ARG_WITH(libpng, [AS_HELP_STRING([--with-libpng],
+@@ -149,2 +157,3 @@
+   AC_SUBST(PNG_LIBS)
++  fi
+ ])
+@@ -232,2 +241,4 @@
+ [
++  # Guard the body: AC_DEFUN_ONCE can hoist a guarded macro call.
++  if test "x$BUILD_TOOLS_ONLY" != xtrue; then
+   AC_ARG_WITH(lcms, [AS_HELP_STRING([--with-lcms],
+@@ -264,2 +275,3 @@
+   AC_SUBST(LCMS_LIBS)
+-])
++  fi
++])
+--- a/make/autoconf/lib-freetype.m4
++++ b/make/autoconf/lib-freetype.m4
+@@ -80,2 +80,4 @@
+ [
++  # Guard the body: AC_DEFUN_ONCE can hoist a guarded macro call.
++  if test "x$BUILD_TOOLS_ONLY" != xtrue; then
+   AC_ARG_WITH(freetype, [AS_HELP_STRING([--with-freetype],
+@@ -228,2 +230,3 @@
+   AC_SUBST(FREETYPE_LIBS)
++  fi
+ ])
+--- a/make/autoconf/spec.gmk.in
++++ b/make/autoconf/spec.gmk.in
+@@ -302,2 +302,3 @@
+ ENABLE_HEADLESS_ONLY := @ENABLE_HEADLESS_ONLY@
++BUILD_TOOLS_ONLY := @BUILD_TOOLS_ONLY@
+
+--- a/make/common/Modules.gmk
++++ b/make/common/Modules.gmk
+@@ -355,2 +355,15 @@
+
++# A tools-only image must omit modules before every compilation phase, not
++# merely trim a complete JDK with jlink. Keep the compiler, archive/signing,
++# inspection and bootstrap tools, their dependencies, and required providers.
++ifeq ($(BUILD_TOOLS_ONLY), true)
++  BUILD_TOOL_MODULES := \
++      java.base java.compiler java.logging java.xml \
++      jdk.compiler jdk.crypto.ec jdk.internal.opt jdk.jartool jdk.javadoc \
++      jdk.jdeps jdk.jlink jdk.unsupported jdk.zipfs
++  MODULES_FILTER += $(filter-out $(BUILD_TOOL_MODULES), \
++      $(call GetModuleNameFromModuleInfo, $(MODULE_INFOS)))
++endif
++
++
+ $(MODULE_DEPS_MAKEFILE): $(MODULE_INFOS) \
+--- a/make/CompileToolsJdk.gmk
++++ b/make/CompileToolsJdk.gmk
+@@ -39,2 +39,15 @@
+
++# These generators are used exclusively by java.desktop, which is not built
++# in a tools-only image. A tools-only boot JDK need not expose its GUI APIs.
++ifeq ($(BUILD_TOOLS_ONLY), true)
++  BUILD_TOOLS_DESKTOP_EXCLUDES := \
++      build/tools/compilefontconfig \
++      build/tools/dtdbuilder \
++      build/tools/generatenimbus \
++      build/tools/icondata/awt \
++      build/tools/x11wrappergen
++else
++  BUILD_TOOLS_DESKTOP_EXPORT := --add-exports java.desktop/sun.awt=ALL-UNNAMED
++endif
++
+ # Use += to be able to add to this from a custom extension
+@@ -50,2 +63,3 @@
+     EXCLUDES := \
++        $(BUILD_TOOLS_DESKTOP_EXCLUDES) \
+         build/tools/classlist \
+@@ -58,3 +72,3 @@
+     ADD_JAVAC_FLAGS := \
+-        --add-exports java.desktop/sun.awt=ALL-UNNAMED \
++        $(BUILD_TOOLS_DESKTOP_EXPORT) \
+         --add-exports java.base/sun.text=ALL-UNNAMED \
+@@ -65,2 +79,3 @@
+
++ifneq ($(BUILD_TOOLS_ONLY), true)
+ $(eval $(call SetupCopyFiles,COPY_NIMBUS_TEMPLATES, \
+@@ -71,2 +86,3 @@
+ TARGETS += $(COPY_NIMBUS_TEMPLATES)
++endif
+
+--- a/make/Main.gmk
++++ b/make/Main.gmk
+@@ -880,7 +880,7 @@
+
+   release-file: create-source-revision-tracker
+
+-  jdk-image: jmods zip-source demos release-file
++  jdk-image: jmods zip-source $(if $(filter true,$(BUILD_TOOLS_ONLY)),,demos) release-file
+   legacy-jre-image: jmods release-file
+   symbols-image: $(LIBS_TARGETS) $(LAUNCHER_TARGETS)
+
+--- a/make/Images.gmk
++++ b/make/Images.gmk
+@@ -152,6 +152,7 @@
+
+ ################################################################################
+ # /demo dir
++ifneq ($(BUILD_TOOLS_ONLY), true)
+ # Avoid doing the expensive find unless called with "jdk" as target.
+ ifneq ($(filter jdk, $(MAKECMDGOALS)), )
+
+@@ -176,6 +177,7 @@
+   ))
+
+   JDK_TARGETS += $(JDK_COPY_DEMOS)
++endif
+ endif
+
+ ################################################################################
+--- a/make/gendata/GendataBreakIterator.gmk
++++ b/make/gendata/GendataBreakIterator.gmk
+@@ -54,2 +54,3 @@
+
++ifneq ($(BUILD_TOOLS_ONLY), true)
+ $(eval $(call SetupJavaCompilation,BUILD_BREAKITERATOR_LD, \
+@@ -61,2 +62,3 @@
+     BIN := $(BREAK_ITERATOR_CLASSES)/jdk.localedata))
++endif
+
+@@ -64,6 +66,6 @@
+     --patch-module java.base=$(BREAK_ITERATOR_CLASSES)/java.base \
+-    --patch-module jdk.localedata=$(BREAK_ITERATOR_CLASSES)/jdk.localedata \
++    $(if $(filter true,$(BUILD_TOOLS_ONLY)),,--patch-module jdk.localedata=$(BREAK_ITERATOR_CLASSES)/jdk.localedata) \
+     --add-exports java.base/sun.text=ALL-UNNAMED \
+     --add-exports java.base/sun.text.resources=ALL-UNNAMED \
+-    --add-exports jdk.localedata/sun.text.resources.ext=ALL-UNNAMED \
++    $(if $(filter true,$(BUILD_TOOLS_ONLY)),,--add-exports jdk.localedata/sun.text.resources.ext=ALL-UNNAMED) \
+     #
+@@ -108,2 +110,2 @@
+
+-TARGETS += $(BIFILES) $(BIFILES_TH)
++TARGETS += $(BIFILES) $(if $(filter true,$(BUILD_TOOLS_ONLY)),,$(BIFILES_TH))
+diff --git a/src/java.base/share/classes/jdk/internal/module/ModuleHashes.java b/src/java.base/share/classes/jdk/internal/module/ModuleHashes.java
+--- a/src/java.base/share/classes/jdk/internal/module/ModuleHashes.java
++++ b/src/java.base/share/classes/jdk/internal/module/ModuleHashes.java
+@@ -1,5 +1,5 @@
+ /*
+- * Copyright (c) 2015, 2016, Oracle and/or its affiliates. All rights reserved.
++ * Copyright (c) 2015, 2020, Oracle and/or its affiliates. All rights reserved.
+  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
+  *
+  * This code is free software; you can redistribute it and/or modify it
+@@ -26,17 +26,21 @@
+ package jdk.internal.module;
+
+ import java.io.IOException;
++import java.io.InputStream;
+ import java.io.UncheckedIOException;
+-import java.nio.ByteBuffer;
+-import java.nio.channels.FileChannel;
+-import java.nio.file.Path;
++import java.lang.module.ModuleReader;
++import java.lang.module.ModuleReference;
++import java.nio.charset.StandardCharsets;
+ import java.security.MessageDigest;
+ import java.security.NoSuchAlgorithmException;
++import java.util.Arrays;
+ import java.util.Collections;
+ import java.util.HashMap;
+ import java.util.Map;
+ import java.util.Objects;
+ import java.util.Set;
++import java.util.TreeMap;
++import java.util.function.Supplier;
+
+ /**
+  * The result of hashing the contents of a number of module artifacts.
+@@ -60,8 +64,8 @@
+      * @param algorithm   the algorithm used to create the hashes
+      * @param nameToHash  the map of module name to hash value
+      */
+-    public ModuleHashes(String algorithm, Map<String, byte[]> nameToHash) {
+-        this.algorithm = algorithm;
++    ModuleHashes(String algorithm, Map<String, byte[]> nameToHash) {
++        this.algorithm = Objects.requireNonNull(algorithm);
+         this.nameToHash = Collections.unmodifiableMap(nameToHash);
+     }
+
+@@ -95,52 +99,123 @@
+     }
+
+     /**
+-     * Computes the hash for the given file with the given message digest
+-     * algorithm.
+-     *
++     * Computes a hash from the names and content of a module.
++     *
++     * @param reader the module reader to access the module content
++     * @param algorithm the name of the message digest algorithm to use
++     * @return the hash
++     * @throws IllegalArgumentException if digest algorithm is not supported
+      * @throws UncheckedIOException if an I/O error occurs
+-     * @throws RuntimeException if the algorithm is not available
+-     */
+-    public static byte[] computeHash(Path file, String algorithm) {
++     */
++    private static byte[] computeHash(ModuleReader reader, String algorithm) {
++        MessageDigest md;
+         try {
+-            MessageDigest md = MessageDigest.getInstance(algorithm);
+-
+-            // Ideally we would just mmap the file but this consumes too much
+-            // memory when jlink is running concurrently on very large jmods
+-            try (FileChannel fc = FileChannel.open(file)) {
+-                ByteBuffer bb = ByteBuffer.allocate(32*1024);
+-                while (fc.read(bb) > 0) {
+-                    bb.flip();
+-                    md.update(bb);
+-                    assert bb.remaining() == 0;
+-                    bb.clear();
++            md = MessageDigest.getInstance(algorithm);
++        } catch (NoSuchAlgorithmException e) {
++            throw new IllegalArgumentException(e);
++        }
++        try {
++            byte[] buf = new byte[32*1024];
++            reader.list().sorted().forEach(rn -> {
++                md.update(rn.getBytes(StandardCharsets.UTF_8));
++                try (InputStream in = reader.open(rn).orElseThrow()) {
++                    int n;
++                    while ((n = in.read(buf)) > 0) {
++                        md.update(buf, 0, n);
++                    }
++                } catch (IOException ioe) {
++                    throw new UncheckedIOException(ioe);
+                 }
+-            }
+-
+-            return md.digest();
+-        } catch (NoSuchAlgorithmException e) {
+-            throw new RuntimeException(e);
++            });
+         } catch (IOException ioe) {
+             throw new UncheckedIOException(ioe);
+         }
+-    }
+-
+-    /**
+-     * Computes the hash for every entry in the given map, returning a
+-     * {@code ModuleHashes} to encapsulate the result. The map key is
+-     * the entry name, typically the module name. The map value is the file
+-     * path to the entry (module artifact).
+-     *
++        return md.digest();
++    }
++
++    /**
++     * Computes a hash from the names and content of a module.
++     *
++     * @param supplier supplies the module reader to access the module content
++     * @param algorithm the name of the message digest algorithm to use
++     * @return the hash
++     * @throws IllegalArgumentException if digest algorithm is not supported
++     * @throws UncheckedIOException if an I/O error occurs
++     */
++    static byte[] computeHash(Supplier<ModuleReader> supplier, String algorithm) {
++        try (ModuleReader reader = supplier.get()) {
++            return computeHash(reader, algorithm);
++        } catch (IOException ioe) {
++            throw new UncheckedIOException(ioe);
++        }
++    }
++
++    /**
++     * Computes the hash from the names and content of a set of modules. Returns
++     * a {@code ModuleHashes} to encapsulate the result.
++     *
++     * @param mrefs the set of modules
++     * @param algorithm the name of the message digest algorithm to use
+      * @return ModuleHashes that encapsulates the hashes
+-     */
+-    public static ModuleHashes generate(Map<String, Path> map, String algorithm) {
+-        Map<String, byte[]> nameToHash = new HashMap<>();
+-        for (Map.Entry<String, Path> entry: map.entrySet()) {
+-            String name = entry.getKey();
+-            Path path = entry.getValue();
+-            nameToHash.put(name, computeHash(path, algorithm));
++     * @throws IllegalArgumentException if digest algorithm is not supported
++     * @throws UncheckedIOException if an I/O error occurs
++     */
++    static ModuleHashes generate(Set<ModuleReference> mrefs, String algorithm) {
++        Map<String, byte[]> nameToHash = new TreeMap<>();
++        for (ModuleReference mref : mrefs) {
++            try (ModuleReader reader = mref.open()) {
++                byte[] hash = computeHash(reader, algorithm);
++                nameToHash.put(mref.descriptor().name(), hash);
++            } catch (IOException ioe) {
++                throw new UncheckedIOException(ioe);
++            }
+         }
+         return new ModuleHashes(algorithm, nameToHash);
++    }
++
++    @Override
++    public int hashCode() {
++        int h = algorithm.hashCode();
++        for (Map.Entry<String, byte[]> e : nameToHash.entrySet()) {
++            h = h * 31 + e.getKey().hashCode();
++            h = h * 31 + Arrays.hashCode(e.getValue());
++        }
++        return h;
++    }
++
++    @Override
++    public boolean equals(Object obj) {
++        if (!(obj instanceof ModuleHashes))
++            return false;
++        ModuleHashes other = (ModuleHashes) obj;
++        if (!algorithm.equals(other.algorithm)
++                || nameToHash.size() != other.nameToHash.size())
++            return false;
++        for (Map.Entry<String, byte[]> e : nameToHash.entrySet()) {
++            String name = e.getKey();
++            byte[] hash = e.getValue();
++            if (!Arrays.equals(hash, other.nameToHash.get(name)))
++                return false;
++        }
++        return true;
++    }
++
++    @Override
++    public String toString() {
++        StringBuilder sb = new StringBuilder(algorithm);
++        sb.append(" ");
++        nameToHash.entrySet()
++                .stream()
++                .sorted(Map.Entry.comparingByKey())
++                .forEach(e -> {
++                    sb.append(e.getKey());
++                    sb.append("=");
++                    byte[] ba = e.getValue();
++                    for (byte b : ba) {
++                        sb.append(String.format("%02x", b & 0xff));
++                    }
++                });
++        return sb.toString();
+     }
+
+     /**
+diff --git a/src/java.base/share/classes/jdk/internal/module/ModuleHashesBuilder.java b/src/java.base/share/classes/jdk/internal/module/ModuleHashesBuilder.java
+--- a/src/java.base/share/classes/jdk/internal/module/ModuleHashesBuilder.java
++++ b/src/java.base/share/classes/jdk/internal/module/ModuleHashesBuilder.java
+@@ -27,9 +27,8 @@
+
+ import java.io.PrintStream;
+ import java.lang.module.Configuration;
++import java.lang.module.ModuleReference;
+ import java.lang.module.ResolvedModule;
+-import java.net.URI;
+-import java.nio.file.Path;
+ import java.util.ArrayDeque;
+ import java.util.Collections;
+ import java.util.Deque;
+@@ -38,7 +37,6 @@
+ import java.util.Map;
+ import java.util.Set;
+ import java.util.function.Consumer;
+-import java.util.function.Function;
+ import java.util.stream.Stream;
+ import static java.util.stream.Collectors.*;
+
+@@ -113,25 +111,15 @@
+                    mods.addAll(ns);
+
+                    if (!ns.isEmpty()) {
+-                       Map<String, Path> moduleToPath = ns.stream()
+-                           .collect(toMap(Function.identity(), this::moduleToPath));
+-                       hashes.put(mn, ModuleHashes.generate(moduleToPath, "SHA-256"));
++                       Set<ModuleReference> mrefs = ns.stream()
++                               .map(name -> configuration.findModule(name)
++                                                         .orElseThrow(InternalError::new))
++                               .map(ResolvedModule::reference)
++                               .collect(toSet());
++                       hashes.put(mn, ModuleHashes.generate(mrefs, "SHA-256"));
+                    }
+                });
+         return hashes;
+-    }
+-
+-    private Path moduleToPath(String name) {
+-        ResolvedModule rm = configuration.findModule(name).orElseThrow(
+-            () -> new InternalError("Selected module " + name + " not on module path"));
+-
+-        URI uri = rm.reference().location().get();
+-        Path path = Path.of(uri);
+-        String fn = path.getFileName().toString();
+-        if (!fn.endsWith(".jar") && !fn.endsWith(".jmod")) {
+-            throw new UnsupportedOperationException(path + " is not a modular JAR or jmod file");
+-        }
+-        return path;
+     }
+
+     /*
+diff --git a/src/java.base/share/classes/jdk/internal/module/ModuleInfoExtender.java b/src/java.base/share/classes/jdk/internal/module/ModuleInfoExtender.java
+--- a/src/java.base/share/classes/jdk/internal/module/ModuleInfoExtender.java
++++ b/src/java.base/share/classes/jdk/internal/module/ModuleInfoExtender.java
+@@ -1,5 +1,5 @@
+ /*
+- * Copyright (c) 2014, 2018, Oracle and/or its affiliates. All rights reserved.
++ * Copyright (c) 2014, 2020, Oracle and/or its affiliates. All rights reserved.
+  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
+  *
+  * This code is free software; you can redistribute it and/or modify it
+@@ -167,7 +167,9 @@
+
+                 // ModulePackages attribute
+                 if (packages != null) {
+-                    packages.forEach(pn -> mv.visitPackage(pn.replace('.', '/')));
++                    packages.stream()
++                            .sorted()
++                            .forEach(pn -> mv.visitPackage(pn.replace('.', '/')));
+                 }
+
+                 return new ModuleVisitor(Opcodes.ASM7, mv) {
+diff --git a/src/java.base/share/classes/jdk/internal/module/ModuleReferences.java b/src/java.base/share/classes/jdk/internal/module/ModuleReferences.java
+--- a/src/java.base/share/classes/jdk/internal/module/ModuleReferences.java
++++ b/src/java.base/share/classes/jdk/internal/module/ModuleReferences.java
+@@ -1,5 +1,5 @@
+ /*
+- * Copyright (c) 2015, 2016, Oracle and/or its affiliates. All rights reserved.
++ * Copyright (c) 2015, 2020, Oracle and/or its affiliates. All rights reserved.
+  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
+  *
+  * This code is free software; you can redistribute it and/or modify it
+@@ -93,7 +93,7 @@
+                                         Path file) {
+         URI uri = file.toUri();
+         Supplier<ModuleReader> supplier = () -> new JarModuleReader(file, uri);
+-        HashSupplier hasher = (a) -> ModuleHashes.computeHash(file, a);
++        HashSupplier hasher = (a) -> ModuleHashes.computeHash(supplier, a);
+         return newModule(attrs, uri, supplier, patcher, hasher);
+     }
+
+@@ -103,7 +103,7 @@
+     static ModuleReference newJModModule(ModuleInfo.Attributes attrs, Path file) {
+         URI uri = file.toUri();
+         Supplier<ModuleReader> supplier = () -> new JModModuleReader(file, uri);
+-        HashSupplier hasher = (a) -> ModuleHashes.computeHash(file, a);
++        HashSupplier hasher = (a) -> ModuleHashes.computeHash(supplier, a);
+         return newModule(attrs, uri, supplier, null, hasher);
+     }
+
+diff --git a/test/jdk/tools/jmod/hashes/HashesTest.java b/test/jdk/tools/jmod/hashes/HashesTest.java
+--- a/test/jdk/tools/jmod/hashes/HashesTest.java
++++ b/test/jdk/tools/jmod/hashes/HashesTest.java
+@@ -1,5 +1,5 @@
+ /**
+- * Copyright (c) 2015, 2018, Oracle and/or its affiliates. All rights reserved.
++ * Copyright (c) 2015, 2020, Oracle and/or its affiliates. All rights reserved.
+  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
+  *
+  * This code is free software; you can redistribute it and/or modify it
+@@ -23,7 +23,7 @@
+
+ /*
+  * @test
+- * @bug 8160286
++ * @bug 8160286 8243666
+  * @summary Test the recording and checking of module hashes
+  * @library /test/lib
+  * @modules java.base/jdk.internal.misc
+@@ -54,6 +54,7 @@
+ import java.util.Arrays;
+ import java.util.Collections;
+ import java.util.List;
++import java.util.Map;
+ import java.util.Set;
+ import java.util.spi.ToolProvider;
+ import java.util.stream.Collectors;
+@@ -84,6 +85,7 @@
+     private final Path srcDir;
+     private final Path lib;
+     private final ModuleInfoMaker builder;
++
+     HashesTest(Path dest) throws IOException {
+         if (Files.exists(dest)) {
+             deleteDirectory(dest);
+@@ -303,6 +305,29 @@
+                     mpath.toString() + File.pathSeparator + ht.lib.toString(),
+                     "--hash-modules", ".*");
+         validateImageJmodsTest(ht, mpath);
++    }
++
++    @Test
++    public static void testReproducibibleHash() throws Exception {
++        HashesTest ht = new HashesTest(Path.of("repro"));
++        ht.makeModule("m4");
++        ht.makeModule("m3", "m4");
++        ht.makeModule("m2");
++        ht.makeModule("m1", "m2", "m3");
++
++        // create JMOD files and run jmod hash
++        List.of("m1", "m2", "m3", "m4").forEach(ht::makeJmod);
++        Map<String, ModuleHashes> hashes1 = ht.runJmodHash();
++
++        // sleep a bit to be confident that the hashes aren't dependent on timestamps
++        Thread.sleep(2000);
++
++        // (re)create JMOD files and run jmod hash
++        List.of("m1", "m2", "m3", "m4").forEach(ht::makeJmod);
++        Map<String, ModuleHashes> hashes2 = ht.runJmodHash();
++
++        // hashes should be equal
++        assertEquals(hashes1, hashes2);
+     }
+
+     private static void validateImageJmodsTest(HashesTest ht, Path mpath)
+@@ -434,6 +459,25 @@
+         runJmod(args);
+     }
+
++    /**
++     * Execute jmod hash on the modules in the lib directory. Returns a map of
++     * the modules, with the module name as the key, for the modules that have
++     * a ModuleHashes class file attribute.
++     */
++    private Map<String, ModuleHashes> runJmodHash() {
++        runJmod(List.of("hash",
++                "--module-path", lib.toString(),
++                "--hash-modules", ".*"));
++        HashesTest ht = this;
++        return ModulePath.of(Runtime.version(), true, lib)
++                .findAll()
++                .stream()
++                .map(ModuleReference::descriptor)
++                .map(ModuleDescriptor::name)
++                .filter(mn -> ht.hashes(mn) != null)
++                .collect(Collectors.toMap(mn -> mn, ht::hashes));
++    }
++
+     private static void runJmod(List<String> args) {
+         int rc = JMOD_TOOL.run(System.out, System.out, args.toArray(new String[args.size()]));
+         System.out.println("jmod " + args.stream().collect(Collectors.joining(" ")));

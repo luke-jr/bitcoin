@@ -2,7 +2,7 @@
 ;; Distributed under the MIT software license, see the accompanying file COPYING.
 
 (define-module (bitcoin android-fileprovider)
-  #:use-module (gnu packages java)
+  #:use-module (bitcoin android-host-jdk)
   #:use-module (gnu packages python)
   #:use-module (guix build-system gnu)
   #:use-module (guix download)
@@ -85,7 +85,7 @@ require API 28 or later."
                   (install-file "androidx-fileprovider.jar" directory)
                   (install-file "androidx-fileprovider-sources.jar" directory)))))))
       (native-inputs
-       (list (list "openjdk" openjdk17 "jdk")
+       (list (list "openjdk" android-openjdk17 "jdk")
              (list "python" python-minimal)
              (list "license-source" license-source)))
       (home-page "https://developer.android.com/reference/androidx/core/content/FileProvider")

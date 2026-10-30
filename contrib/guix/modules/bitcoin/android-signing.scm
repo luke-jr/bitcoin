@@ -3,7 +3,7 @@
 
 (define-module (bitcoin android-signing)
   #:use-module (gnu packages bash)
-  #:use-module (gnu packages java)
+  #:use-module (bitcoin android-host-jdk)
   #:use-module (guix build-system gnu)
   #:use-module (guix gexp)
   #:use-module (guix git-download)
@@ -91,10 +91,10 @@
                     (lambda (port)
                       (format port "#!~a~%exec ~a -jar ~a \"$@\"~%"
                               #$(file-append bash-minimal "/bin/bash")
-                              #$(file-append openjdk17 "/bin/java") jar)))
+                              #$(file-append android-openjdk17 "/bin/java") jar)))
                   (chmod (string-append bin "/apksigner") #o755)))))))
-      (native-inputs (list (list openjdk17 "jdk")))
-      (inputs (list bash-minimal openjdk17))
+      (native-inputs (list (list android-openjdk17 "jdk")))
+      (inputs (list bash-minimal android-openjdk17))
       (home-page "https://android.googlesource.com/platform/tools/apksig/")
       (synopsis "Sign and verify Android APKs with a source-built Java tool")
       (description
@@ -176,10 +176,10 @@ artifacts, Conscrypt, or optional cloud KMS providers.")
                   (lambda (port)
                     (format port "#!~a~%exec ~a -jar ~a \"$@\"~%"
                             #$(file-append bash-minimal "/bin/bash")
-                            #$(file-append openjdk17 "/bin/java") jar)))
+                            #$(file-append android-openjdk17 "/bin/java") jar)))
                 (chmod (string-append bin "/android-aab-verify") #o755)))))))
-    (native-inputs (list (list openjdk17 "jdk")))
-    (inputs (list bash-minimal openjdk17))
+    (native-inputs (list (list android-openjdk17 "jdk")))
+    (inputs (list bash-minimal android-openjdk17))
     (home-page "https://bitcoinknots.org/")
     (synopsis "Verify all App Bundle entries against a pinned signing certificate")
     (description

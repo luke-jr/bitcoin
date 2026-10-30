@@ -542,11 +542,25 @@ inspecting signatures in Mach-O binaries.")
   ;; only the signing tools when reconstructing detached signatures.
   (module-ref (resolve-interface module) name))
 
-(packages->manifest
+(define (make-release-manifest packages)
+  (packages->manifest
+   (if (equal? (getenv "HOST") "aarch64-linux-android")
+       (let ((headless (android-package '(bitcoin android-host-jdk)
+                                        'android-headless-package)))
+         ;; Java dependencies can also select a bootstrap JDK implicitly through
+         ;; their build system.  Rewrite those inputs as well as the top-level JDK.
+         (map (lambda (entry)
+                (if (package? entry)
+                    (headless entry)
+                    (cons (headless (car entry)) (cdr entry))))
+              packages))
+       packages)))
+
+(make-release-manifest
  (if (and (equal? (getenv "HOST") "aarch64-linux-android")
           (equal? (getenv "GUIX_BUILD_MODE") "codesign"))
      ;; Applying Android signatures needs Java tools, but no cross compiler or SDK.
-     (let ((jdk (android-package '(gnu packages java) 'openjdk17)))
+     (let ((jdk (android-package '(bitcoin android-host-jdk) 'android-openjdk17)))
        (list bash-minimal coreutils-minimal diffutils findutils grep sed gawk
              tar gzip git-minimal python-minimal sponge (list jdk "jdk")
              (android-package '(bitcoin android-signing) 'android-apksigner)
@@ -597,7 +611,7 @@ inspecting signatures in Mach-O binaries.")
                  nss-certs
                  osslsigncode))
           ((equal? target "aarch64-linux-android")
-           (let ((jdk (android-package '(gnu packages java) 'openjdk17)))
+           (let ((jdk (android-package '(bitcoin android-host-jdk) 'android-openjdk17)))
              (append
               (list jdk (list jdk "jdk"))
               (cond

@@ -12,7 +12,7 @@
   #:use-module (gnu packages)
   #:use-module (gnu packages perl)
   #:use-module (gnu packages python)
-  #:use-module (gnu packages java)
+  #:use-module (bitcoin android-host-jdk)
   #:use-module (bitcoin android)
   #:use-module (bitcoin android-sdk))
 
@@ -144,7 +144,7 @@ including lrelease, for compiling the Android GUI's translation catalogs.")
                  (string-append licenses "/android-runtime")))))
           (add-after 'set-paths 'target-environment
             (lambda _
-              (setenv "JAVA_HOME" #$openjdk17:jdk)
+              (setenv "JAVA_HOME" #$android-openjdk17:jdk)
               (for-each unsetenv '("C_INCLUDE_PATH" "CPLUS_INCLUDE_PATH" "CPATH" "LIBRARY_PATH"))))
           (add-after 'install 'expose-host-tools-and-normalize-jars
             (lambda _
@@ -152,7 +152,7 @@ including lrelease, for compiling the Android GUI's translation catalogs.")
               (symlink #$qttools-android-host (string-append #$output "/lib/qt6-host-tools"))
               (invoke "python3" #$%normalize-jars #$output)))
           (delete 'strip))))
-    (native-inputs (list perl python-minimal (list openjdk17 "jdk")
+    (native-inputs (list perl python-minimal (list android-openjdk17 "jdk")
                          qtbase-android-host qttools-android-host))
     (inputs (list android-api-36 android-aarch64-gui-toolchain))
     (native-search-paths
