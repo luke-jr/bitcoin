@@ -13,6 +13,7 @@
 #include <iosfwd>
 #include <limits>
 #include <optional>
+#include <utility>
 
 /**
  * Ensure file contents are fully committed to disk, using a platform-specific
@@ -39,7 +40,17 @@ inline int FileSeek64(FILE* file, int64_t offset, int origin)
 #if defined(WIN32)
     return _fseeki64(file, offset, origin);
 #else
-    return std::fseek(file, offset, origin);
+    if constexpr (std::numeric_limits<long>::max() < std::numeric_limits<int64_t>::max()) {
+        if (!std::in_range<long>(offset)) [[unlikely]] {
+            const long step{offset > 0 ? std::numeric_limits<long>::max() : std::numeric_limits<long>::min()};
+            do {
+                if (const int ret{std::fseek(file, step, origin)}; ret != 0) return ret;
+                offset -= step;
+                origin = SEEK_CUR;
+            } while (!std::in_range<long>(offset));
+        }
+    }
+    return std::fseek(file, static_cast<long>(offset), origin);
 #endif
 }
 

@@ -6,6 +6,7 @@
 #include <test/util/random.h>
 #include <test/util/setup_common.h>
 #include <util/fs.h>
+#include <util/fs_helpers.h>
 #include <util/strencodings.h>
 
 #include <boost/test/unit_test.hpp>
@@ -67,6 +68,61 @@ BOOST_AUTO_TEST_CASE(xor_file)
         BOOST_CHECK_EXCEPTION(xor_file.ignore(1), std::ios_base::failure, HasReason{"AutoFile::ignore: end of file"});
         BOOST_CHECK_EXCEPTION(xor_file >> std::byte{}, std::ios_base::failure, HasReason{"AutoFile::read: end of file"});
     }
+}
+
+BOOST_AUTO_TEST_CASE(autofile_large_seek)
+{
+    FILE* raw_file{fsbridge::fopen(m_args.GetDataDirBase() / "seek_test_tmp", "w+b")};
+    AutoFile file{raw_file};
+    BOOST_REQUIRE(!file.IsNull());
+
+#if !defined(WIN32)
+    constexpr long native_step{1L << 30};
+    constexpr int64_t offset{int64_t{native_step} * 4};
+    file.seek(7, SEEK_SET);
+    // Some implementations reject large positions even with small relative seeks.
+    bool can_seek_large{true};
+    for (int i = 0; i < 4; ++i) {
+        if (std::fseek(raw_file, native_step, SEEK_CUR) != 0) {
+            can_seek_large = false;
+            break;
+        }
+    }
+    if (!can_seek_large) BOOST_TEST_MESSAGE("Native fseek does not support large positions");
+
+    for (const int origin : {SEEK_SET, SEEK_CUR, SEEK_END}) {
+        file.seek(7, SEEK_SET);
+        const int ret{FileSeek64(raw_file, offset, origin)};
+        if (!can_seek_large) {
+            BOOST_CHECK_NE(ret, 0);
+            continue;
+        }
+        BOOST_REQUIRE_EQUAL(ret, 0);
+        for (int i = 0; i < 4; ++i) {
+            BOOST_REQUIRE_EQUAL(std::fseek(raw_file, -native_step, SEEK_CUR), 0);
+        }
+        BOOST_CHECK_EQUAL(std::ftell(raw_file), origin == SEEK_CUR ? 7 : 0);
+    }
+
+    if (can_seek_large) {
+        file.seek(7, SEEK_SET);
+        for (int i = 0; i < 4; ++i) {
+            BOOST_REQUIRE_EQUAL(std::fseek(raw_file, native_step, SEEK_CUR), 0);
+        }
+        BOOST_REQUIRE_EQUAL(FileSeek64(raw_file, -offset, SEEK_CUR), 0);
+        BOOST_CHECK_EQUAL(std::ftell(raw_file), 7);
+    }
+
+    for (const int origin : {SEEK_SET, SEEK_CUR, SEEK_END}) {
+        file.seek(7, SEEK_SET);
+        BOOST_CHECK_NE(FileSeek64(raw_file, -offset, origin), 0);
+    }
+#endif
+
+    file.seek(7, SEEK_SET);
+    file.seek(-7, SEEK_CUR);
+    BOOST_CHECK_EQUAL(file.tell(), 0);
+    BOOST_CHECK_EQUAL(std::ftell(raw_file), 0);
 }
 
 BOOST_AUTO_TEST_CASE(streams_vector_writer)
