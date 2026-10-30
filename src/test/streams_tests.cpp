@@ -86,18 +86,25 @@ BOOST_AUTO_TEST_CASE(autofile_large_seek)
     BOOST_REQUIRE(!file.IsNull());
 
 #if !defined(WIN32)
+    const auto native_seek{[raw_file](long distance, int origin) {
+#if defined(USE_FSEEKO)
+        return fseeko(raw_file, distance, origin);
+#else
+        return std::fseek(raw_file, distance, origin);
+#endif
+    }};
     constexpr long native_step{1L << 30};
     constexpr int64_t offset{int64_t{native_step} * 4};
     file.seek(7, SEEK_SET);
     // Some implementations reject large positions even with small relative seeks.
     bool can_seek_large{true};
     for (int i = 0; i < 4; ++i) {
-        if (std::fseek(raw_file, native_step, SEEK_CUR) != 0) {
+        if (native_seek(native_step, SEEK_CUR) != 0) {
             can_seek_large = false;
             break;
         }
     }
-    if (!can_seek_large) BOOST_TEST_MESSAGE("Native fseek does not support large positions");
+    if (!can_seek_large) BOOST_TEST_MESSAGE("Native seek does not support large positions");
 
     for (const int origin : {SEEK_SET, SEEK_CUR, SEEK_END}) {
         file.seek(7, SEEK_SET);
@@ -107,8 +114,10 @@ BOOST_AUTO_TEST_CASE(autofile_large_seek)
             continue;
         }
         BOOST_REQUIRE_EQUAL(ret, 0);
+        // An in-range displacement can still refer to a position beyond long.
+        BOOST_REQUIRE_EQUAL(FileSeek64(raw_file, 0, SEEK_CUR), 0);
         for (int i = 0; i < 4; ++i) {
-            BOOST_REQUIRE_EQUAL(std::fseek(raw_file, -native_step, SEEK_CUR), 0);
+            BOOST_REQUIRE_EQUAL(native_seek(-native_step, SEEK_CUR), 0);
         }
         BOOST_CHECK_EQUAL(std::ftell(raw_file), origin == SEEK_CUR ? 7 : 0);
     }
@@ -116,7 +125,7 @@ BOOST_AUTO_TEST_CASE(autofile_large_seek)
     if (can_seek_large) {
         file.seek(7, SEEK_SET);
         for (int i = 0; i < 4; ++i) {
-            BOOST_REQUIRE_EQUAL(std::fseek(raw_file, native_step, SEEK_CUR), 0);
+            BOOST_REQUIRE_EQUAL(native_seek(native_step, SEEK_CUR), 0);
         }
         BOOST_REQUIRE_EQUAL(FileSeek64(raw_file, -offset, SEEK_CUR), 0);
         BOOST_CHECK_EQUAL(std::ftell(raw_file), 7);
