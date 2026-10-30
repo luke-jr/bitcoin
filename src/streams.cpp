@@ -72,6 +72,7 @@ void AutoFile::ignore(size_t nSize)
     while (nSize > 0) {
         size_t nNow = std::min<size_t>(nSize, sizeof(data));
         if (std::fread(data, 1, nNow, m_file) != nNow) {
+            m_position_cache.reset(); // part of it may have moved the file
             throw std::ios_base::failure(feof() ? "AutoFile::ignore: end of file" : "AutoFile::ignore: fread failed");
         }
         nSize -= nNow;
@@ -84,6 +85,7 @@ void AutoFile::write(Span<const std::byte> src)
     if (!m_file) throw std::ios_base::failure("AutoFile::write: file handle is nullptr");
     if (m_xor.empty()) {
         if (std::fwrite(src.data(), 1, src.size(), m_file) != src.size()) {
+            m_position_cache.reset(); // part of it may have moved the file
             throw std::ios_base::failure("AutoFile::write: write failed");
         }
         if (m_position_cache.has_value()) *m_position_cache += src.size();
@@ -95,6 +97,7 @@ void AutoFile::write(Span<const std::byte> src)
             std::copy(src.begin(), src.begin() + buf_now.size(), buf_now.begin());
             util::Xor(buf_now, m_xor, *m_position_cache);
             if (std::fwrite(buf_now.data(), 1, buf_now.size(), m_file) != buf_now.size()) {
+                m_position_cache.reset(); // part of it may have moved the file
                 throw std::ios_base::failure{"XorFile::write: failed"};
             }
             src = src.subspan(buf_now.size());
