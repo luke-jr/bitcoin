@@ -137,14 +137,43 @@ BOOST_AUTO_TEST_CASE(autofile_seek_failure)
     for (const int origin : {SEEK_SET, SEEK_CUR, SEEK_END}) {
         file.seek(7, SEEK_SET);
         BOOST_CHECK_EXCEPTION(file.seek(-1, SEEK_SET), std::ios_base::failure, HasReason{"AutoFile::seek: fseek failed"});
-        BOOST_CHECK_EXCEPTION(file.tell(), std::ios_base::failure, HasReason{"AutoFile::tell: position unknown"});
 
         // Establish a known native position without restoring the cache.
         BOOST_REQUIRE_EQUAL(FileSeek64(raw_file, 11, SEEK_SET), 0);
         file.seek(0, origin);
         BOOST_CHECK_EQUAL(file.tell(), origin == SEEK_CUR ? 11 : 0);
         BOOST_CHECK_EQUAL(file.tell(), FileTell64(raw_file));
+
+        // With the cache cleared, tell() asks the file
+        BOOST_CHECK_EXCEPTION(file.seek(-1, SEEK_SET), std::ios_base::failure, HasReason{"AutoFile::seek: fseek failed"});
+        BOOST_REQUIRE_EQUAL(FileSeek64(raw_file, 5, SEEK_SET), 0);
+        BOOST_CHECK_EQUAL(file.tell(), 5);
     }
+}
+
+BOOST_AUTO_TEST_CASE(autofile_xor_read_unknown_position)
+{
+    const std::vector<std::byte> xor_pat{std::byte{0x01}, std::byte{0x02}, std::byte{0x04}};
+    FILE* raw_file{fsbridge::fopen(m_args.GetDataDirBase() / "xor_position_tmp", "w+b")};
+    AutoFile file{raw_file, xor_pat};
+    BOOST_REQUIRE(!file.IsNull());
+    file << uint32_t{0x11223344} << uint32_t{0x55667788};
+    BOOST_CHECK_EXCEPTION(file.seek(-1, SEEK_SET), std::ios_base::failure, HasReason{"AutoFile::seek: fseek failed"});
+
+    // The position is found before the read moves it, so the bytes decode at their own offset
+    BOOST_REQUIRE_EQUAL(FileSeek64(raw_file, 4, SEEK_SET), 0);
+    uint32_t value;
+    file >> value;
+    BOOST_CHECK_EQUAL(value, 0x55667788U);
+    BOOST_CHECK_EQUAL(file.tell(), 8);
+
+    // Writing works the same way
+    BOOST_CHECK_EXCEPTION(file.seek(-1, SEEK_SET), std::ios_base::failure, HasReason{"AutoFile::seek: fseek failed"});
+    BOOST_REQUIRE_EQUAL(FileSeek64(raw_file, 2, SEEK_SET), 0);
+    file << uint8_t{0xaa};
+    file.seek(0, SEEK_SET);
+    file >> value;
+    BOOST_CHECK_EQUAL(value, 0x11aa3344U);
 }
 
 BOOST_AUTO_TEST_CASE(streams_vector_reader)

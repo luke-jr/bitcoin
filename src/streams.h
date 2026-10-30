@@ -9,6 +9,7 @@
 #include <serialize.h>
 #include <span.h>
 #include <support/allocators/zeroafterfree.h>
+#include <util/fs_helpers.h>
 #include <util/overflow.h>
 
 #include <algorithm>
@@ -393,7 +394,17 @@ class AutoFile
 protected:
     std::FILE* m_file;
     std::vector<std::byte> m_xor;
-    std::optional<int64_t> m_position;
+    /** The file's position, or nullopt until position() can ask the file for it */
+    mutable std::optional<int64_t> m_position_cache;
+
+    std::optional<int64_t> position() const
+    {
+        if (!m_position_cache.has_value() && !IsNull()) [[unlikely]] {
+            auto pos{FileTell64(m_file)};
+            if (pos >= 0) m_position_cache = pos;
+        }
+        return m_position_cache;
+    }
 
 public:
     explicit AutoFile(std::FILE* file, std::vector<std::byte> data_xor={});
