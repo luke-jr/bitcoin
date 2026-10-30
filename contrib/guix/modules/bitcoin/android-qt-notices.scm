@@ -42,11 +42,11 @@ the Qt libraries or introducing generated build metadata.")
      (list license:bsd-2 license:bsd-3 license:freetype license:gpl2
            license:expat license:ijg license:zlib
            (license:x11-style
-            "https://github.com/harfbuzz/harfbuzz/blob/14.5.0/COPYING"
+            "https://github.com/harfbuzz/harfbuzz/blob/14.6.0/COPYING"
             "HarfBuzz's Old MIT license.")
            (license:non-copyleft
-            "https://github.com/PCRE2Project/pcre2/blob/pcre2-10.48/LICENCE.md"
+            "https://github.com/PCRE2Project/pcre2/blob/pcre2-10.49/LICENCE.md"
             "BSD 3-clause license with PCRE2 binary-like packages exception.")
            (license:non-copyleft
-            "https://github.com/pnggroup/libpng/blob/v1.6.58/LICENSE"
+            "https://github.com/pnggroup/libpng/blob/v1.6.59/LICENSE"
             "libpng license and PNG Reference Library license version 2.")))))

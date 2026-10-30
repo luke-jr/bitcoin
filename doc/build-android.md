@@ -14,15 +14,19 @@ See the [module contract](../src/android/README.md) before using its API.
 Use the existing [Guix release framework](../contrib/guix/README.md), including
 its pinned Guix revision. The Android manifest selects source-built LLVM/LLD,
 Bionic headers and link stubs, CRT objects, compiler-rt and C++ runtimes. The GUI
-also builds Qt 6.12.0, OpenJDK, AAPT2, D8, FileProvider, platform API stubs and
-framework resource stubs from pinned sources. No downloaded Android SDK, NDK,
+also builds a pinned Qt 6.12.1 prerelease, OpenJDK, AAPT2, D8, FileProvider,
+platform API stubs and framework resource stubs from pinned sources. No downloaded Android SDK, NDK,
 Qt installation, Gradle distribution or binary Maven library is a release input.
 The normal Guix bootstrap trust model still applies.
 
-The GUI uses source-built CMake 3.31.12 for Qt 6.12. The Qt source includes
-the published CVE-2026-105924 patch; subsequent Qt updates need to track the
-upstream public security patches. The APK includes the original notices for
-Qt's bundled third-party libraries alongside Qt's license texts.
+The GUI uses source-built CMake 3.31.12 for Qt 6.12. QtBase and QtTools are
+pinned by full commit IDs and recursive source hashes in
+[android-qt.scm](../contrib/guix/modules/bitcoin/android-qt.scm);
+the Guix package version is `6.12.1-pre.20261030`. Matching host and target Qt
+sources include the upstream Android surface-lifecycle fixes and the fix for
+CVE-2026-105924. Future updates need to track the upstream maintenance and public
+security changes. The APK includes the original notices for Qt's bundled
+third-party libraries alongside Qt's license texts.
 
 The host Java bootstrap builds the runtime, compiler, archive and signing tools
 needed by these packages. Component and module selection exclude native desktop,

@@ -4,7 +4,7 @@
 
 (define-module (bitcoin android-qt)
   #:use-module (guix packages)
-  #:use-module (guix download)
+  #:use-module (guix git-download)
   #:use-module (guix gexp)
   #:use-module (guix search-paths)
   #:use-module (guix build-system cmake)
@@ -20,25 +20,24 @@
 (define %normalize-jars
   (local-file "../../libexec/normalize-android-jars.py"))
 
-(define (qt-source component hash)
+(define %qt-snapshot-version "6.12.1-pre.20261030")
+
+(define (qt-source component commit hash)
   (origin
-    (method url-fetch)
-    (uri (string-append "https://download.qt.io/official_releases/qt/6.12/6.12.0/submodules/"
-                        component "-everywhere-src-6.12.0.tar.xz"))
+    (method git-fetch)
+    ;; Pin the maintenance snapshot, never a moving branch. The only QtTools
+    ;; submodule belongs to Assistant, which is disabled in this tools build.
+    (uri (git-reference
+          (url (string-append "https://github.com/qt/" component))
+          (commit commit)))
+    (file-name (git-file-name component commit))
     (sha256 (base32 hash))
-    ;; Apply the same moc compatibility patch as the pinned Guix Qt packages.
-    ;; Guix exposes GCC's C++ headers through CPLUS_INCLUDE_PATH, which moc
-    ;; scans without the compiler predefines needed by _GLIBCXX_VISIBILITY.
+    ;; The snapshot includes CVE-2026-105924 and the Android surface-lifecycle
+    ;; fixes. Retain only Guix's moc header workaround and source Java build.
     (patches (if (string=? component "qtbase")
                  (append
                   (search-patches "qtbase-moc-ignore-gcc-macro.patch")
-                  (list
-                   (origin
-                     (method url-fetch)
-                     (uri "https://download.qt.io/official_releases/qt/6.12/CVE-2026-105924-qtbase-6.12.diff")
-                     (sha256
-                      (base32 "02z5igk4nziqavwcbpzdha3yjcm4jjxkylcdq6qdlb5gdaw2fzf2")))
-                   (local-file "../../patches/qtbase-android-source-java.patch")))
+                  (list (local-file "../../patches/qtbase-android-source-java.patch")))
                  '()))
     (modules '((guix build utils)))
     (snippet
@@ -53,8 +52,10 @@
 (define-public qtbase-android-host
   (package
     (name "qtbase-android-host")
-    (version "6.12.0")
-    (source (qt-source "qtbase" "01qk2cw34xk60v0i6gipab0r3gvann7ndmw8iimzr03v7hbbsld9"))
+    (version %qt-snapshot-version)
+    (source (qt-source "qtbase"
+                       "f200e69bc7146dfc447fe62b6f9db9c57be85fb9"
+                       "1ckrabq0qqmfp8fldds55028a1whmxgsgkza0w7r46dw0k7z7zvd"))
     (build-system cmake-build-system)
     (arguments
      (list
@@ -81,8 +82,10 @@ desktop Qt 5 depends build.")
 (define-public qttools-android-host
   (package
     (name "qttools-android-host")
-    (version "6.12.0")
-    (source (qt-source "qttools" "14q62swgpfmxdrpqnaraq9mz7155xrf12pxdf2j8cr2924v8zawd"))
+    (version %qt-snapshot-version)
+    (source (qt-source "qttools"
+                       "c48591fa2e1f83aad2e98232ba93380c0438b308"
+                       "0si2yyk4jl7gs5csn32zmsblw96r3vyi6nxbaz58dgay0587mg43"))
     (build-system cmake-build-system)
     (arguments
      (list
