@@ -2,6 +2,8 @@
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
+#include <bitcoin-build-config.h> // IWYU pragma: keep
+
 #include <streams.h>
 #include <test/util/random.h>
 #include <test/util/setup_common.h>
@@ -10,6 +12,13 @@
 #include <util/strencodings.h>
 
 #include <boost/test/unit_test.hpp>
+
+#include <limits>
+#include <memory>
+
+#if defined(USE_FTELLO) && !defined(WIN32)
+#include <unistd.h>
+#endif
 
 using namespace std::string_literals;
 
@@ -124,6 +133,30 @@ BOOST_AUTO_TEST_CASE(autofile_large_seek)
     BOOST_CHECK_EQUAL(file.tell(), 0);
     BOOST_CHECK_EQUAL(std::ftell(raw_file), 0);
 }
+
+#if defined(USE_FTELLO) && !defined(WIN32)
+BOOST_AUTO_TEST_CASE(autofile_large_initial_position)
+{
+    constexpr int64_t position{int64_t{1} << 32};
+    const auto in_range{[min = std::numeric_limits<off_t>::min(), max = std::numeric_limits<off_t>::max()](auto value) {
+        return min <= value && value <= max;
+    }};
+    if (!in_range(position)) {
+        BOOST_TEST_MESSAGE("Skipping large file position test: off_t is too small");
+        return;
+    }
+
+    auto close_file{[](FILE* file) { std::fclose(file); }};
+    std::unique_ptr<FILE, decltype(close_file)> raw_file{fsbridge::fopen(m_args.GetDataDirBase() / "tell_test_tmp", "w+b"), close_file};
+    BOOST_REQUIRE(raw_file);
+    // Position the descriptor without passing the offset through long.
+    BOOST_REQUIRE(lseek(fileno(raw_file.get()), static_cast<off_t>(position), SEEK_SET) == static_cast<off_t>(position));
+    BOOST_CHECK_EQUAL(FileTell64(raw_file.get()), position);
+
+    AutoFile file{raw_file.release()};
+    BOOST_CHECK_EQUAL(file.tell(), position);
+}
+#endif
 
 BOOST_AUTO_TEST_CASE(streams_vector_writer)
 {

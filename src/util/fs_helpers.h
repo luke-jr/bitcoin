@@ -6,6 +6,8 @@
 #ifndef BITCOIN_UTIL_FS_HELPERS_H
 #define BITCOIN_UTIL_FS_HELPERS_H
 
+#include <bitcoin-build-config.h> // IWYU pragma: keep
+
 #include <util/fs.h>
 
 #include <cstdint>
@@ -64,6 +66,8 @@ inline int64_t FileTell64(FILE* file)
 {
 #if defined(WIN32)
     return _ftelli64(file);
+#elif defined(USE_FTELLO)
+    return ftello(file);
 #else
     return std::ftell(file);
 #endif

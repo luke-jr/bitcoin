@@ -14,6 +14,28 @@ check_include_file_cxx(vm/vm_param.h HAVE_VM_VM_PARAM_H)
 
 check_cxx_symbol_exists(O_CLOEXEC "fcntl.h" HAVE_O_CLOEXEC)
 check_cxx_symbol_exists(fdatasync "unistd.h" HAVE_FDATASYNC)
+
+set(_saved_required_definitions "${CMAKE_REQUIRED_DEFINITIONS}")
+if (CMAKE_SYSTEM_NAME STREQUAL "Linux" AND CMAKE_SIZEOF_VOID_P EQUAL 4)
+  # Feature probes do not inherit core_interface's large-file definition.
+  list(APPEND CMAKE_REQUIRED_DEFINITIONS -D_FILE_OFFSET_BITS=64)
+endif()
+check_cxx_source_compiles("
+  #include <cstdio>
+  #include <limits>
+
+  int main()
+  {
+    FILE* file{stdin};
+    static_assert(std::numeric_limits<decltype(ftello(file))>::digits >
+                  std::numeric_limits<long>::digits);
+    return ftello(file) < 0;
+  }
+  " USE_FTELLO
+)
+set(CMAKE_REQUIRED_DEFINITIONS "${_saved_required_definitions}")
+unset(_saved_required_definitions)
+
 check_cxx_symbol_exists(fork "unistd.h" HAVE_DECL_FORK)
 if (NOT CMAKE_SYSTEM_NAME STREQUAL "Darwin")
   check_cxx_symbol_exists(pipe2 "unistd.h" HAVE_DECL_PIPE2)
