@@ -101,6 +101,11 @@ MANIFEST
             -DANDROID_STL=c++_shared -DCMAKE_ANDROID_STL_TYPE=c++_shared \
             -DCMAKE_SKIP_BUILD_RPATH=TRUE
         cmake --build build --target bitcoin-qt -j "$JOBS" ${V:+--verbose}
+        # androiddeployqt edits this template after copying project resources.
+        # Supply a writable application copy: QFile::copy otherwise preserves
+        # the read-only permissions of the template in the Guix store.
+        install -D -m 644 "$GUIX_ENVIRONMENT/src/android/templates/res/values/libs.xml" \
+            build/src/qt/android/res/values/libs.xml
         mkdir -p stage/libs/arm64-v8a debug
         cp build/lib/libbitcoin-qt_arm64-v8a.so stage/libs/arm64-v8a/
         "$QT_HOST_PATH/bin/androiddeployqt" --aux-mode \

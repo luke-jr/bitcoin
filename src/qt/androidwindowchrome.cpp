@@ -13,6 +13,7 @@
 #include <QFontDialog>
 #include <QHBoxLayout>
 #include <QInputDialog>
+#include <QKeyEvent>
 #include <QLabel>
 #include <QLineEdit>
 #include <QMessageBox>
@@ -46,10 +47,17 @@ bool CanClose(QWidget* window)
     return window->windowFlags().testFlag(Qt::WindowCloseButtonHint);
 }
 
+bool IsSecondaryWindow(QWidget* window)
+{
+    return qobject_cast<QDialog*>(window) || window->inherits("RPCConsole") ||
+           window->inherits("GuiNetWatch") || window->inherits("MempoolStats");
+}
+
 class AndroidWindowChrome : public QObject
 {
     bool m_updating_palette{false};
     bool m_palette_refresh_queued{false};
+    bool m_back_handled{false};
 
     void UpdatePlaceholder(QWidget* widget)
     {
@@ -88,6 +96,40 @@ public:
 protected:
     bool eventFilter(QObject* object, QEvent* event) override
     {
+        if (event->type() == QEvent::KeyPress || event->type() == QEvent::KeyRelease) {
+            auto* key = static_cast<QKeyEvent*>(event);
+            auto* receiver = qobject_cast<QWidget*>(object);
+            if (receiver && key->key() == Qt::Key_Back) {
+                if (event->type() == QEvent::KeyRelease) {
+                    if (!m_back_handled) return false;
+                    if (!key->isAutoRepeat()) m_back_handled = false;
+                    key->accept();
+                    return true;
+                }
+                if (key->isAutoRepeat() && m_back_handled) {
+                    key->accept();
+                    return true;
+                }
+                m_back_handled = false;
+                auto* window = QApplication::activePopupWidget();
+                const bool popup = window != nullptr;
+                if (!window) window = QApplication::activeModalWidget();
+                if (!window) window = receiver->window();
+                if (!window->isWindow() || !window->isVisible() || (!popup && !IsSecondaryWindow(window))) return false;
+                // Qt 6.12 backgrounds the activity when Back is unhandled.
+                // Consume it even if this dialog cannot currently close.
+                m_back_handled = true;
+                key->accept();
+                if (auto* progress = qobject_cast<QProgressDialog*>(window)) {
+                    auto* cancel = progress->findChild<QPushButton*>();
+                    if (!cancel || !cancel->isVisible() || !cancel->isEnabled()) return true;
+                }
+                // close() preserves closeEvent vetoes and framework dialog
+                // cancellation rules; reject() would bypass those vetoes.
+                if (popup || CanClose(window)) window->close();
+                return true;
+            }
+        }
         if (event->type() == QEvent::ApplicationPaletteChange && !m_palette_refresh_queued) {
             m_palette_refresh_queued = true;
             QTimer::singleShot(0, this, [this] {
@@ -103,7 +145,7 @@ protected:
         if (!window || !window->isWindow()) return false;
         const auto type = window->windowType();
         if (type == Qt::Popup || type == Qt::ToolTip || type == Qt::SplashScreen) return false;
-        if (!qobject_cast<QDialog*>(window) && !window->inherits("RPCConsole")) return false;
+        if (!IsSecondaryWindow(window)) return false;
         // Framework dialogs provide their own action buttons and may rely on
         // their private root layout type. Leave those layouts intact, including
         // progress dialogs whose cancellation has deliberately been disabled.

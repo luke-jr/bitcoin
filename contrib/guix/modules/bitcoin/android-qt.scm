@@ -12,6 +12,7 @@
   #:use-module (gnu packages)
   #:use-module (gnu packages perl)
   #:use-module (gnu packages python)
+  #:use-module (bitcoin android-host-cmake)
   #:use-module (bitcoin android-host-jdk)
   #:use-module (bitcoin android)
   #:use-module (bitcoin android-sdk))
@@ -22,14 +23,22 @@
 (define (qt-source component hash)
   (origin
     (method url-fetch)
-    (uri (string-append "https://download.qt.io/archive/qt/6.9/6.9.3/submodules/"
-                        component "-everywhere-src-6.9.3.tar.xz"))
+    (uri (string-append "https://download.qt.io/official_releases/qt/6.12/6.12.0/submodules/"
+                        component "-everywhere-src-6.12.0.tar.xz"))
     (sha256 (base32 hash))
     ;; Apply the same moc compatibility patch as the pinned Guix Qt packages.
     ;; Guix exposes GCC's C++ headers through CPLUS_INCLUDE_PATH, which moc
     ;; scans without the compiler predefines needed by _GLIBCXX_VISIBILITY.
     (patches (if (string=? component "qtbase")
-                 (search-patches "qtbase-moc-ignore-gcc-macro.patch")
+                 (append
+                  (search-patches "qtbase-moc-ignore-gcc-macro.patch")
+                  (list
+                   (origin
+                     (method url-fetch)
+                     (uri "https://download.qt.io/official_releases/qt/6.12/CVE-2026-105924-qtbase-6.12.diff")
+                     (sha256
+                      (base32 "02z5igk4nziqavwcbpzdha3yjcm4jjxkylcdq6qdlb5gdaw2fzf2")))
+                   (local-file "../../patches/qtbase-android-source-java.patch")))
                  '()))
     (modules '((guix build utils)))
     (snippet
@@ -37,30 +46,19 @@
           '(begin
              ;; Gradle is not part of the release pipeline. Remove the bundled
              ;; binary wrapper before building or installing anything.
-             (delete-file "src/3rdparty/gradle/gradle/wrapper/gradle-wrapper.jar")
-             (substitute* "src/3rdparty/gradle/CMakeLists.txt"
-               ((".*gradle-wrapper.jar.*\n") ""))
-             ;; Auxiliary staging must include project manifest/resources as
-             ;; normal deployment does, while never copying Gradle tooling.
-             (substitute* "src/tools/androiddeployqt/main.cpp"
-               (("    if \\(!copyGradleTemplate\\(options\\)\\)")
-                "    if (!options.auxMode && !copyGradleTemplate(options))")
-               (("    if \\(options.auxMode\\) \\{\n")
-                "    if (options.auxMode) {\n        if (!copyAndroidSources(options))\n            return CannotCopyAndroidSources;\n"))
-             ;; Compile solely against the source-built Android API and its
-             ;; compiler-only lambda stub, never the host JDK API classes.
-             (substitute* "cmake/QtJavaHelpers.cmake"
-               (("-classpath \"\\$\\{QT_ANDROID_JAR\\}\"")
-                "-bootclasspath \"${QT_ANDROID_JAR}:${ANDROID_SDK_ROOT}/share/android/core-lambda-stubs.jar\"")))))))
+             ;; Qt 6.12 already copies application sources and updates the
+             ;; manifest in --aux-mode without copying Gradle tooling.
+             (delete-file "src/3rdparty/gradle/gradle/wrapper/gradle-wrapper.jar"))))))
 
 (define-public qtbase-android-host
   (package
     (name "qtbase-android-host")
-    (version "6.9.3")
-    (source (qt-source "qtbase" "0vnwp12wvsab1vsn8zhi4mcvrpg5iacq59xzzs0w0vimc3va58f5"))
+    (version "6.12.0")
+    (source (qt-source "qtbase" "01qk2cw34xk60v0i6gipab0r3gvann7ndmw8iimzr03v7hbbsld9"))
     (build-system cmake-build-system)
     (arguments
      (list
+      #:cmake android-host-cmake
       #:tests? #f
       #:build-type "Release"
       #:configure-flags
@@ -83,11 +81,12 @@ desktop Qt 5 depends build.")
 (define-public qttools-android-host
   (package
     (name "qttools-android-host")
-    (version "6.9.3")
-    (source (qt-source "qttools" "1sdla2blvk9r4g7v67dhwqjxx7kflyh7cm9pw5f7ziazjw7apxqc"))
+    (version "6.12.0")
+    (source (qt-source "qttools" "14q62swgpfmxdrpqnaraq9mz7155xrf12pxdf2j8cr2924v8zawd"))
     (build-system cmake-build-system)
     (arguments
      (list
+      #:cmake android-host-cmake
       #:tests? #f
       #:build-type "Release"
       #:configure-flags
@@ -112,6 +111,7 @@ including lrelease, for compiling the Android GUI's translation catalogs.")
     (name "qtbase-android")
     (arguments
      (list
+      #:cmake android-host-cmake
       #:tests? #f
       #:build-type "Release"
       #:validate-runpath? #f ; Android dependencies are resolved on the device.
@@ -126,12 +126,13 @@ including lrelease, for compiling the Android GUI's translation catalogs.")
          "-DANDROID_STL=c++_shared" "-DQT_ANDROID_API_USED_FOR_JAVA=android-36"
          "-DQT_ANDROID_JAVAC_SOURCE=8" "-DQT_ANDROID_JAVAC_TARGET=8"
          "-DQT_BUILD_TESTS=OFF" "-DQT_BUILD_EXAMPLES=OFF"
+         "-DFEATURE_sql=OFF" "-DFEATURE_concurrent=OFF" "-DFEATURE_testlib=OFF"
          "-DFEATURE_dbus=OFF" "-DFEATURE_openssl=OFF" "-DFEATURE_vulkan=OFF"
          "-DINPUT_opengl=es2" "-DFEATURE_system_zlib=OFF"
          "-DFEATURE_system_pcre2=OFF" "-DFEATURE_system_doubleconversion=OFF"
          "-DFEATURE_system_freetype=OFF" "-DFEATURE_system_harfbuzz=OFF"
          "-DFEATURE_system_libpng=OFF" "-DFEATURE_system_jpeg=OFF"
-         "-DFEATURE_system_sqlite=OFF" "-DBUILD_WITH_PCH=OFF" "-DCMAKE_SKIP_RPATH=ON")
+         "-DBUILD_WITH_PCH=OFF" "-DCMAKE_SKIP_RPATH=ON")
       #:phases
       #~(modify-phases %standard-phases
           (add-after 'unpack 'preserve-qt-licenses

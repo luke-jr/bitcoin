@@ -15,8 +15,8 @@ public final class KnotsActivity extends QtActivity {
         if (intent == null || (getApplicationInfo().flags & ApplicationInfo.FLAG_DEBUGGABLE) != 0) {
             return;
         }
-        // QtLoader accepts applicationArguments even in release builds. The
-        // other two Qt extras configure native arguments and the environment.
+        // Keep release startup configuration under this application's control,
+        // independently of QtLoader's handling of configuration extras.
         intent.removeExtra("applicationArguments");
         intent.removeExtra("extraappparams");
         intent.removeExtra("extraenvvars");

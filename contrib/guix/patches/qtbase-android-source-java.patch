@@ -1,0 +1,38 @@
+Use the direct javac implementation with the source-built Android API.
+
+The release pipeline does not use Gradle. Remove its binary wrapper from
+the CMake source list, and compile Java against Android rather than the host
+JDK APIs. The source origin also deletes the wrapper JAR itself.
+
+--- a/cmake/QtJavaHelpers.cmake
++++ b/cmake/QtJavaHelpers.cmake
+@@ -34,6 +34,10 @@
+ endfunction()
+ 
+ function(qt_internal_add_jar target)
++    # The source-built Android toolchain packages Java without Gradle.
++    _qt_internal_add_jar_with_javac("${target}" ${ARGN})
++    return()
++
+     set(options)
+     set(oneValueArgs OUTPUT_DIR GRADLE_PROJECT_DIR)
+     set(multiValueArgs INCLUDE_JARS SOURCES)
+@@ -211,7 +215,7 @@
+     endif()
+ 
+     set(CMAKE_JAVA_COMPILE_FLAGS -source "${javac_source_version}" -target "${javac_target_version}"
+-        -Xlint:all -Xdoclint:all,-missing -classpath "${QT_ANDROID_JAR}"
++        -Xlint:all -Xdoclint:all,-missing -bootclasspath "${QT_ANDROID_JAR}:${ANDROID_SDK_ROOT}/share/android/core-lambda-stubs.jar"
+     )
+ 
+     set(absolute_sources "")
+--- a/src/3rdparty/gradle/CMakeLists.txt
++++ b/src/3rdparty/gradle/CMakeLists.txt
+@@ -12,7 +12,6 @@
+ )
+ set(gradle_wrapper_files
+     "${CMAKE_CURRENT_SOURCE_DIR}/gradle/wrapper/gradle-wrapper.properties"
+-    "${CMAKE_CURRENT_SOURCE_DIR}/gradle/wrapper/gradle-wrapper.jar"
+ )
+ 
+ add_custom_target(Qt${QtBase_VERSION_MAJOR}GradleScripts

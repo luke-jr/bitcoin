@@ -67,6 +67,9 @@ def package(args):
         launcher = args.qt_java_source / f'org/qtproject/qt/android/bindings/{name}.java'
         if not launcher.is_file():
             raise ValueError(f'Missing Qt launcher Java source: {launcher}')
+    qt_resources = args.qt_java_source.parent / 'res'
+    if not (qt_resources / 'xml/qtprovider_paths.xml').is_file():
+        raise ValueError('Missing Qt Android Java resources')
     if any(not directory.is_dir() for directory in args.license_directory):
         raise ValueError('Missing dependency license directory')
     args.work.mkdir(parents=True, exist_ok=False)
@@ -88,21 +91,25 @@ def package(args):
     manifest_path.write_text(manifest, encoding='utf-8')
 
     compiled = args.work / 'compiled-resources.zip'
+    compiled_qt = args.work / 'compiled-qt-resources.zip'
     resources = args.work / 'resources.apk'
     generated_java = args.work / 'generated-java'
     resource_ids = args.work / 'resource-ids.txt'
     invoke(args.aapt2, 'compile', '--dir', args.stage / 'res', '-o', compiled)
+    # Qt 6.12 keeps the binding strings and FileProvider paths alongside its
+    # launcher sources. Gradle normally adds this separate resource directory.
+    invoke(args.aapt2, 'compile', '--dir', qt_resources, '-o', compiled_qt)
     invoke(args.aapt2, 'link', '-o', resources, '-I', args.framework_resources,
            '--manifest', manifest_path, '--min-sdk-version', '28', '--target-sdk-version', '36',
            '--compile-sdk-version-code', '36', '--compile-sdk-version-name', '16',
-           '--emit-ids', resource_ids, '--java', generated_java, compiled)
+           '--emit-ids', resource_ids, '--java', generated_java, compiled_qt, compiled)
     # The AAB uses the same IDs as the APK but protobuf resources. Source paths
     # are build metadata and must not enter the reproducible upload artifact.
     invoke(args.aapt2, 'link', '-o', args.work / 'resources-proto.apk',
            '-I', args.framework_resources, '--manifest', manifest_path,
            '--min-sdk-version', '28', '--target-sdk-version', '36',
            '--compile-sdk-version-code', '36', '--compile-sdk-version-name', '16',
-           '--proto-format', '--exclude-sources', '--stable-ids', resource_ids, compiled)
+           '--proto-format', '--exclude-sources', '--stable-ids', resource_ids, compiled_qt, compiled)
 
     jars = sorted((args.stage / 'libs').glob('*.jar')) + [args.fileprovider]
     if not jars or any(not jar.is_file() for jar in jars):

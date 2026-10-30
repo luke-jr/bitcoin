@@ -586,7 +586,10 @@ inspecting signatures in Mach-O binaries.")
         xz
         ;; Build tools
         gcc-toolchain-13
-        cmake-minimal
+        (if (and (equal? (getenv "HOST") "aarch64-linux-android")
+                 (not (equal? (getenv "ANDROID_BUILD_MODE") "module")))
+            (android-package '(bitcoin android-host-cmake) 'android-host-cmake)
+            cmake-minimal)
         gnu-make
         pkg-config)
   (cond
@@ -624,6 +627,7 @@ inspecting signatures in Mach-O binaries.")
                                                   'make-android-fileprovider)))
                   (list (android-package '(bitcoin android) 'android-aarch64-gui-toolchain)
                         (android-package '(bitcoin android-qt) 'qtbase-android)
+                        (android-package '(bitcoin android-qt-notices) 'qtbase-android-notices)
                         api
                         (android-package '(bitcoin android-framework-res) 'android-framework-res-36)
                         (android-package '(bitcoin android-aapt2) 'android-aapt2)
