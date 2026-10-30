@@ -1,0 +1,14 @@
+Android device-testing follow-ups
+
+Recorded for later investigation; no fixes implied by this list.
+
+- Options dialog: the fake titlebar has no close button.
+- Network policy: investigate P2P listening on cellular even while Wi-Fi is
+  connected. Pausing based on the active connection may be insufficient;
+  consider blocking metered P2P interfaces instead.
+- Mempool Statistics: no fake titlebar or other way to close the window.
+- Menus: long items are unnecessarily shortened with ellipses.
+- Non-fullscreen modal windows, including About Knots, have no border.
+- Accelerator keys are underlined despite having no usable activation method.
+- Reconsider whether the date-based Android versionCode scheme is appropriate.
+- Logging: expected debug.log messages are still absent from logcat.
