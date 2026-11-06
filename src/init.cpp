@@ -1067,7 +1067,9 @@ bool AppInitParameterInteraction(const ArgsManager& args)
         }
     }
 
-    nBytesPerSigOp = args.GetIntArg("-bytespersigop", nBytesPerSigOp);
+    if (auto err = args.AssignIntArgToVar("bytespersigop", nBytesPerSigOp); !err) {
+        return InitError(util::ErrorString(err));
+    }
     nBytesPerSigOpStrict = args.GetIntArg("-bytespersigopstrict", nBytesPerSigOpStrict);
 
     if (!g_wallet_init_interface.ParameterInteraction()) return false;
